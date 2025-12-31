@@ -2,7 +2,11 @@ import streamlit as st
 import pandas as pd
 
 st.set_page_config(page_title="المختبر الذكي", layout="wide")
-st.title("🧪 المختبر الذكي")
+st.markdown("""
+<h1 style='text-align: center;'>🧪 المختبر الذكي</h1>
+<h3 style='text-align: center; color: gray;'>إعداد وتطوير: حسن روضه</h3>
+<hr>
+""", unsafe_allow_html=True)
 
 # إنشاء جدول النتائج
 if "data" not in st.session_state:
