@@ -50,7 +50,20 @@ if st.button("إضافة النتيجة"):
 
 # عرض البيانات
 st.subheader("النتائج المحفوظة")
-st.dataframe(st.session_state.data, use_container_width=True)
+
+# مربع البحث
+search_name = st.text_input("🔍 ابحث باسم المريض")
+
+if search_name:
+    query = f"""
+    SELECT * FROM results
+    WHERE patient_name LIKE '%{search_name}%'
+    """
+    df = pd.read_sql_query(query, conn)
+else:
+    df = pd.read_sql_query("SELECT * FROM results", conn)
+
+st.dataframe(df, use_container_width=True)
 
 # تحميل Excel
 if st.button("تحميل Excel"):
