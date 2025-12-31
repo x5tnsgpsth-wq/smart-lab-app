@@ -1,71 +1,63 @@
 import streamlit as st
+import sqlite3
 import pandas as pd
-import os
+from datetime import datetime
 
-st.set_page_config(page_title="المختبر الذكي", layout="wide")
+# الاتصال بقاعدة البيانات
+conn = sqlite3.connect("lab_results.db", check_same_thread=False)
+cursor = conn.cursor()
 
-# عنوان التطبيق
-st.markdown("""
-<h1 style='text-align: center;'>🧪 المختبر الذكي</h1>
-<h3 style='text-align: center; color: gray;'>إعداد وتطوير: حسن روضه</h3>
-<hr>
-""", unsafe_allow_html=True)
+# إنشاء الجدول إذا لم يكن موجودًا
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    patient_name TEXT,
+    test_name TEXT,
+    result_value TEXT,
+    normal_range TEXT,
+    date TEXT
+)
+""")
+conn.commit()
 
-DATA_FILE = "data.csv"
+st.title("🧪 المختبر الذكي")
 
-# تحميل البيانات من الملف إن وجد
-if os.path.exists(DATA_FILE):
-    df = pd.read_csv(DATA_FILE)
-else:
-    df = pd.DataFrame(columns=["اسم المريض", "اسم الفحص", "النتيجة", "ملاحظات"])
+st.subheader("إدخال نتيجة فحص")
 
-# حفظ البيانات في session
-if "data" not in st.session_state:
-    st.session_state.data = df
+patient_name = st.text_input("اسم المريض")
+test_name = st.text_input("اسم الفحص")
+result_value = st.text_input("النتيجة")
+normal_range = st.text_input("القيم الطبيعية")
 
-# إدخال البيانات
-st.subheader("إدخال نتيجة جديدة")
-name = st.text_input("اسم المريض")
-test = st.text_input("اسم الفحص")
-result = st.text_input("النتيجة")
-notes = st.text_input("ملاحظات")
-
-if st.button("إضافة النتيجة"):
-    if name and test and result:
-        new_row = {
-            "اسم المريض": name,
-            "اسم الفحص": test,
-            "النتيجة": result,
-            "ملاحظات": notes
-        }
-        st.session_state.data = pd.concat(
-            [st.session_state.data, pd.DataFrame([new_row])],
-            ignore_index=True
-        )
-        # حفظ تلقائي
-        st.session_state.data.to_csv(DATA_FILE, index=False)
-        st.success("تمت إضافة النتيجة وحفظها تلقائيًا ✅")
+if st.button("💾 حفظ النتيجة"):
+    if patient_name and test_name and result_value:
+        cursor.execute("""
+        INSERT INTO results (patient_name, test_name, result_value, normal_range, date)
+        VALUES (?, ?, ?, ?, ?)
+        """, (
+            patient_name,
+            test_name,
+            result_value,
+            normal_range,
+            datetime.now().strftime("%Y-%m-%d %H:%M")
+        ))
+        conn.commit()
+        st.success("✅ تم حفظ النتيجة بنجاح")
     else:
-        st.warning("يرجى ملء جميع الحقول")
+        st.warning("⚠️ يرجى ملء الحقول الأساسية")
 
-# عرض البيانات
 st.subheader("النتائج المحفوظة")
 
-# مربع البحث
+# البحث
 search_name = st.text_input("🔍 ابحث باسم المريض")
 
 if search_name:
-    query = f"""
-    SELECT * FROM results
-    WHERE patient_name LIKE '%{search_name}%'
-    """
-    df = pd.read_sql_query(query, conn)
+    df = pd.read_sql_query(
+        "SELECT * FROM results WHERE patient_name LIKE ?",
+        conn,
+        params=(f"%{search_name}%",)
+    )
 else:
     df = pd.read_sql_query("SELECT * FROM results", conn)
 
 st.dataframe(df, use_container_width=True)
-
-# تحميل Excel
-if st.button("تحميل Excel"):
-    st.session_state.data.to_excel("نتائج_المختبر.xlsx", index=False)
-    st.success("تم إنشاء ملف Excel 📁"
