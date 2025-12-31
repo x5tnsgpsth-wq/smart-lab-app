@@ -3,11 +3,14 @@ import sqlite3
 import pandas as pd
 from datetime import datetime
 
+# إعداد الصفحة وتغيير الاتجاه للعربية
+st.set_page_config(page_title="المختبر الذكي", layout="wide")
+st.markdown("""<style> body { text-align: right; direction: rtl; } </style>""", unsafe_allow_html=True)
+
 # الاتصال بقاعدة البيانات
 conn = sqlite3.connect("lab_results.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# إنشاء الجدول إذا لم يكن موجودًا
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS results (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,44 +23,37 @@ CREATE TABLE IF NOT EXISTS results (
 """)
 conn.commit()
 
-st.title("🧪 المختبر الذكي")
+st.title("🧪 نظام المختبر الذكي")
+st.divider()
 
-st.subheader("إدخال نتيجة فحص")
+# تقسيم الواجهة إلى أعمدة
+col1, col2 = st.columns([1, 2])
 
-patient_name = st.text_input("اسم المريض")
-test_name = st.text_input("اسم الفحص")
-result_value = st.text_input("النتيجة")
-normal_range = st.text_input("القيم الطبيعية")
+with col1:
+    st.subheader("📝 إدخال نتيجة جديدة")
+    patient_name = st.text_input("اسم المريض")
+    test_name = st.text_input("نوع الفحص")
+    result_value = st.text_input("النتيجة")
+    normal_range = st.text_input("المعدل الطبيعي")
+    
+    if st.button("💾 حفظ النتيجة"):
+        if patient_name and test_name and result_value:
+            cursor.execute("INSERT INTO results (patient_name, test_name, result_value, normal_range, date) VALUES (?, ?, ?, ?, ?)",
+                           (patient_name, test_name, result_value, normal_range, datetime.now().strftime("%Y-%m-%d %H:%M")))
+            conn.commit()
+            st.success("تم الحفظ بنجاح!")
+            st.rerun() # لتحديث الجدول فوراً
+        else:
+            st.error("يرجى ملء البيانات الأساسية")
 
-if st.button("💾 حفظ النتيجة"):
-    if patient_name and test_name and result_value:
-        cursor.execute("""
-        INSERT INTO results (patient_name, test_name, result_value, normal_range, date)
-        VALUES (?, ?, ?, ?, ?)
-        """, (
-            patient_name,
-            test_name,
-            result_value,
-            normal_range,
-            datetime.now().strftime("%Y-%m-%d %H:%M")
-        ))
-        conn.commit()
-        st.success("✅ تم حفظ النتيجة بنجاح")
-    else:
-        st.warning("⚠️ يرجى ملء الحقول الأساسية")
+with col2:
+    st.subheader("🔍 السجل والبحث")
+    search = st.text_input("ابحث عن مريض بالاسم")
+    
+    query = "SELECT * FROM results"
+    if search:
+        query += f" WHERE patient_name LIKE '%{search}%'"
+    
+    df = pd.read_sql_query(query, conn)
+    st.dataframe(df, use_container_width=True)
 
-st.subheader("النتائج المحفوظة")
-
-# البحث
-search_name = st.text_input("🔍 ابحث باسم المريض")
-
-if search_name:
-    df = pd.read_sql_query(
-        "SELECT * FROM results WHERE patient_name LIKE ?",
-        conn,
-        params=(f"%{search_name}%",)
-    )
-else:
-    df = pd.read_sql_query("SELECT * FROM results", conn)
-
-st.dataframe(df, use_container_width=True)
