@@ -3,69 +3,86 @@ import sqlite3
 import pandas as pd
 from datetime import datetime
 
-# إعدادات واجهة المستخدم
-st.set_page_config(page_title="Smart Lab", layout="wide")
-st.markdown("""<style> .main { text-align: right; direction: rtl; } </style>""", unsafe_allow_html=True)
+# إعدادات الصفحة والجمالية
+st.set_page_config(page_title="نظام المختبر المتكامل", layout="wide")
+st.markdown("""
+    <style>
+    .report-card {
+        border: 2px solid #f0f2f6;
+        padding: 20px;
+        border-radius: 10px;
+        background-color: #ffffff;
+        text-align: right;
+    }
+    @media print {
+        .no-print { display: none !important; }
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # قاعدة البيانات
-conn = sqlite3.connect("lab_database.db", check_same_thread=False)
+conn = sqlite3.connect("lab_plus.db", check_same_thread=False)
 c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS patients 
-             (id INTEGER PRIMARY KEY, name TEXT, test TEXT, result REAL, min_v REAL, max_v REAL, status TEXT, date TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS tests 
+             (id INTEGER PRIMARY KEY, name TEXT, test_type TEXT, result REAL, unit TEXT, min_v REAL, max_v REAL, date TEXT)''')
 conn.commit()
 
-st.title("🧪 مختبر الذكاء الاصطناعي - إدارة النتائج")
+# القائمة الجانبية للتنقل
+menu = st.sidebar.selectbox("القائمة الرئيسية", ["إضافة نتائج", "سجل الفحوصات", "إصدار تقرير طباعة"])
 
-# --- نموذج الإدخال ---
-with st.container():
-    st.subheader("📝 تسجيل فحص جديد")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        name = st.text_input("اسم المريض بالكامل")
-        test = st.text_input("اسم الفحص (مثل: CBC, Urea)")
-    with c2:
-        res = st.number_input("النتيجة", format="%.2f")
-        min_v = st.number_input("الحد الأدنى الطبيعي", value=0.0)
-    with c3:
-        max_v = st.number_input("الحد الأعلى الطبيعي", value=100.0)
+if menu == "إضافة نتائج":
+    st.header("📥 إدخال بيانات الفحص")
+    with st.form("input_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            name = st.text_input("اسم المريض")
+            test_type = st.selectbox("نوع الفحص", ["Glucose", "CBC", "Uric Acid", "Cholesterol", "Creatinine"])
+            unit = st.text_input("الوحدة (مثل mg/dL)", value="mg/dL")
+        with col2:
+            res = st.number_input("النتيجة", format="%.2f")
+            min_v = st.number_input("الحد الأدنى", value=0.0)
+            max_v = st.number_input("الحد الأعلى", value=100.0)
         
-    if st.button("✅ حفظ النتيجة وتحليلها"):
-        if name and test:
-            # تحديد الحالة تلقائياً
-            status = "طبيعي"
-            if res > max_v: status = "مرتفع ⚠️"
-            elif res < min_v: status = "منخفض ⚠️"
-            
+        submit = st.form_submit_button("حفظ النتيجة")
+        if submit and name:
             now = datetime.now().strftime("%Y-%m-%d %H:%M")
-            c.execute("INSERT INTO patients (name, test, result, min_v, max_v, status, date) VALUES (?,?,?,?,?,?,?)",
-                      (name, test, res, min_v, max_v, status, now))
+            c.execute("INSERT INTO tests (name, test_type, result, unit, min_v, max_v, date) VALUES (?,?,?,?,?,?,?)",
+                      (name, test_type, res, unit, min_v, max_v, now))
             conn.commit()
-            st.balloons() # تأثير احتفالي عند النجاح
-            st.success(f"تم حفظ فحص المريض {name} بنجاح")
-            st.rerun()
+            st.success("تم الحفظ بنجاح!")
 
-st.divider()
+elif menu == "سجل الفحوصات":
+    st.header("📋 السجل العام")
+    df = pd.read_sql("SELECT * FROM tests ORDER BY id DESC", conn)
+    st.dataframe(df, use_container_width=True)
 
-# --- عرض البيانات والبحث ---
-st.subheader("🔍 سجل الفحوصات والبحث")
-search_query = st.text_input("ابحث عن مريض بالاسم...")
-
-query = "SELECT name as 'اسم المريض', test as 'الفحص', result as 'النتيجة', status as 'الحالة', date as 'التاريخ' FROM patients"
-if search_query:
-    query += f" WHERE name LIKE '%{search_query}%'"
-
-df = pd.read_sql(query, conn)
-
-if not df.empty:
-    # تنسيق الجدول وتلوين الحالات
-    def color_status(val):
-        color = 'red' if '⚠️' in str(val) else 'green'
-        return f'color: {color}'
-
-    st.dataframe(df.style.applymap(color_status, subset=['الحالة']), use_container_width=True)
+elif menu == "إصدار تقرير طباعة":
+    st.header("🖨️ قسم الطباعة والتقارير")
+    search_name = st.selectbox("اختر اسم المريض لإصدار تقريره", pd.read_sql("SELECT DISTINCT name FROM tests", conn))
     
-    # ميزة تصدير البيانات لملف Excel
-    csv = df.to_csv(index=False).encode('utf-8-sig')
-    st.download_button("📥 تحميل السجل كملف Excel (CSV)", data=csv, file_name="lab_results.csv", mime="text/csv")
-else:
-    st.info("لا توجد فحوصات مسجلة حتى الآن.")
+    if search_name:
+        data = pd.read_sql(f"SELECT * FROM tests WHERE name = '{search_name}'", conn)
+        for index, row in data.iterrows():
+            with st.container():
+                st.markdown(f"""
+                <div class="report-card">
+                    <h2 style="color: #1E88E5;">تقرير مختبر تحليلات مرضية</h2>
+                    <hr>
+                    <p><b>اسم المريض:</b> {row['name']}</p>
+                    <p><b>التاريخ:</b> {row['date']}</p>
+                    <table style="width:100%; border-collapse: collapse; margin-top: 10px;">
+                        <tr style="background-color: #f8f9fa;">
+                            <th style="border: 1px solid #ddd; padding: 8px;">الفحص</th>
+                            <th style="border: 1px solid #ddd; padding: 8px;">النتيجة</th>
+                            <th style="border: 1px solid #ddd; padding: 8px;">المعدل الطبيعي</th>
+                        </tr>
+                        <tr>
+                            <td style="border: 1px solid #ddd; padding: 8px;">{row['test_type']}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px;">{row['result']} {row['unit']}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px;">{row['min_v']} - {row['max_v']}</td>
+                        </tr>
+                    </table>
+                </div>
+                """, unsafe_allow_html=True)
+                st.button(f"طباعة تقرير {row['id']}", on_click=lambda: st.write("اضغط Ctrl+P للطباعة"))
+
