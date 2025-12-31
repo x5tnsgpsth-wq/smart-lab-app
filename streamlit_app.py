@@ -55,4 +55,4 @@ st.dataframe(st.session_state.data, use_container_width=True)
 # تحميل Excel
 if st.button("تحميل Excel"):
     st.session_state.data.to_excel("نتائج_المختبر.xlsx", index=False)
-    st.success("تم إنشاء ملف Excel 📁")
+    st.success("تم إنشاء ملف Excel 📁"
