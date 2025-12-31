@@ -1,2 +1,4 @@
- 
-# هنا انسخ كل كود streamlit_app.py بين علامات الاقتباس الثلاثة
+import streamlit as st
+
+st.title("✅ التطبيق يعمل")
+st.write("إذا ظهرت هذه الصفحة، فكل شيء صحيح")
