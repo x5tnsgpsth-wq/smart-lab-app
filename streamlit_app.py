@@ -1,19 +1,29 @@
 import streamlit as st
 import pandas as pd
+import os
 
 st.set_page_config(page_title="المختبر الذكي", layout="wide")
+
+# عنوان التطبيق
 st.markdown("""
 <h1 style='text-align: center;'>🧪 المختبر الذكي</h1>
 <h3 style='text-align: center; color: gray;'>إعداد وتطوير: حسن روضه</h3>
 <hr>
 """, unsafe_allow_html=True)
 
-# إنشاء جدول النتائج
-if "data" not in st.session_state:
-    st.session_state.data = pd.DataFrame(
-        columns=["اسم المريض", "اسم الفحص", "النتيجة", "ملاحظات"]
-    )
+DATA_FILE = "data.csv"
 
+# تحميل البيانات من الملف إن وجد
+if os.path.exists(DATA_FILE):
+    df = pd.read_csv(DATA_FILE)
+else:
+    df = pd.DataFrame(columns=["اسم المريض", "اسم الفحص", "النتيجة", "ملاحظات"])
+
+# حفظ البيانات في session
+if "data" not in st.session_state:
+    st.session_state.data = df
+
+# إدخال البيانات
 st.subheader("إدخال نتيجة جديدة")
 name = st.text_input("اسم المريض")
 test = st.text_input("اسم الفحص")
@@ -32,13 +42,17 @@ if st.button("إضافة النتيجة"):
             [st.session_state.data, pd.DataFrame([new_row])],
             ignore_index=True
         )
-        st.success("تمت إضافة النتيجة بنجاح ✅")
+        # حفظ تلقائي
+        st.session_state.data.to_csv(DATA_FILE, index=False)
+        st.success("تمت إضافة النتيجة وحفظها تلقائيًا ✅")
     else:
         st.warning("يرجى ملء جميع الحقول")
 
-st.subheader("جدول النتائج")
+# عرض البيانات
+st.subheader("النتائج المحفوظة")
 st.dataframe(st.session_state.data, use_container_width=True)
 
-if st.button("حفظ النتائج كملف Excel"):
+# تحميل Excel
+if st.button("تحميل Excel"):
     st.session_state.data.to_excel("نتائج_المختبر.xlsx", index=False)
-    st.success("تم حفظ الملف بنجاح 📁")
+    st.success("تم إنشاء ملف Excel 📁")
