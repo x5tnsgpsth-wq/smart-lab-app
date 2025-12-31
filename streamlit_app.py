@@ -3,76 +3,69 @@ import sqlite3
 import pandas as pd
 from datetime import datetime
 
-# إعدادات الصفحة
-st.set_page_config(page_title="المختبر الذكي", layout="wide")
+# إعدادات واجهة المستخدم
+st.set_page_config(page_title="Smart Lab", layout="wide")
+st.markdown("""<style> .main { text-align: right; direction: rtl; } </style>""", unsafe_allow_html=True)
 
-# تصميم واجهة عربية
-st.markdown("""
-    <style>
-    .main { text-align: right; direction: rtl; }
-    div[data-testid="stBlock"] { text-align: right; direction: rtl; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# الاتصال بقاعدة البيانات
-conn = sqlite3.connect("lab_results.db", check_same_thread=False)
-cursor = conn.cursor()
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS results (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    patient_name TEXT,
-    test_name TEXT,
-    result_value REAL,
-    min_range REAL,
-    max_range REAL,
-    date TEXT
-)
-""")
+# قاعدة البيانات
+conn = sqlite3.connect("lab_database.db", check_same_thread=False)
+c = conn.cursor()
+c.execute('''CREATE TABLE IF NOT EXISTS patients 
+             (id INTEGER PRIMARY KEY, name TEXT, test TEXT, result REAL, min_v REAL, max_v REAL, status TEXT, date TEXT)''')
 conn.commit()
 
-st.title("🧪 نظام إدارة نتائج المختبر")
+st.title("🧪 مختبر الذكاء الاصطناعي - إدارة النتائج")
 
-# --- قسم إدخال البيانات ---
-with st.expander("➕ إضافة نتيجة فحص جديدة"):
-    col1, col2 = st.columns(2)
-    with col1:
-        p_name = st.text_input("اسم المريض")
-        t_name = st.text_input("نوع الفحص (مثلاً: Glucose)")
-    with col2:
-        r_val = st.number_input("النتيجة المخبرية", format="%.2f")
+# --- نموذج الإدخال ---
+with st.container():
+    st.subheader("📝 تسجيل فحص جديد")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        name = st.text_input("اسم المريض بالكامل")
+        test = st.text_input("اسم الفحص (مثل: CBC, Urea)")
+    with c2:
+        res = st.number_input("النتيجة", format="%.2f")
         min_v = st.number_input("الحد الأدنى الطبيعي", value=0.0)
+    with c3:
         max_v = st.number_input("الحد الأعلى الطبيعي", value=100.0)
-
-    if st.button("💾 حفظ وإضافة للسجل"):
-        if p_name and t_name:
-            cursor.execute("INSERT INTO results (patient_name, test_name, result_value, min_range, max_range, date) VALUES (?,?,?,?,?,?)",
-                           (p_name, t_name, r_val, min_v, max_v, datetime.now().strftime("%Y-%m-%d %H:%M")))
+        
+    if st.button("✅ حفظ النتيجة وتحليلها"):
+        if name and test:
+            # تحديد الحالة تلقائياً
+            status = "طبيعي"
+            if res > max_v: status = "مرتفع ⚠️"
+            elif res < min_v: status = "منخفض ⚠️"
+            
+            now = datetime.now().strftime("%Y-%m-%d %H:%M")
+            c.execute("INSERT INTO patients (name, test, result, min_v, max_v, status, date) VALUES (?,?,?,?,?,?,?)",
+                      (name, test, res, min_v, max_v, status, now))
             conn.commit()
-            st.success(f"تم تسجيل فحص المريض: {p_name}")
+            st.balloons() # تأثير احتفالي عند النجاح
+            st.success(f"تم حفظ فحص المريض {name} بنجاح")
             st.rerun()
 
 st.divider()
 
-# --- قسم العرض والبحث ---
-st.subheader("📋 سجل الفحوصات")
-search = st.text_input("🔍 ابحث عن اسم مريض...")
+# --- عرض البيانات والبحث ---
+st.subheader("🔍 سجل الفحوصات والبحث")
+search_query = st.text_input("ابحث عن مريض بالاسم...")
 
-query = "SELECT * FROM results"
-if search:
-    query += f" WHERE patient_name LIKE '%{search}%'"
+query = "SELECT name as 'اسم المريض', test as 'الفحص', result as 'النتيجة', status as 'الحالة', date as 'التاريخ' FROM patients"
+if search_query:
+    query += f" WHERE name LIKE '%{search_query}%'"
 
-df = pd.read_sql_query(query, conn)
-
-# وظيفة لتلوين النتائج غير الطبيعية
-def highlight_results(row):
-    color = 'white'
-    if row['result_value'] > row['max_range'] or row['result_value'] < row['min_range']:
-        color = '#ffcccc' # أحمر خفيف للنتائج المقلقة
-    return ['background-color: %s' % color] * len(row)
+df = pd.read_sql(query, conn)
 
 if not df.empty:
-    st.dataframe(df.style.apply(highlight_results, axis=1), use_container_width=True)
+    # تنسيق الجدول وتلوين الحالات
+    def color_status(val):
+        color = 'red' if '⚠️' in str(val) else 'green'
+        return f'color: {color}'
+
+    st.dataframe(df.style.applymap(color_status, subset=['الحالة']), use_container_width=True)
+    
+    # ميزة تصدير البيانات لملف Excel
+    csv = df.to_csv(index=False).encode('utf-8-sig')
+    st.download_button("📥 تحميل السجل كملف Excel (CSV)", data=csv, file_name="lab_results.csv", mime="text/csv")
 else:
-    st.info("لا توجد بيانات مسجلة حالياً.")
-
-
+    st.info("لا توجد فحوصات مسجلة حتى الآن.")
