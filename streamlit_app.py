@@ -5,21 +5,23 @@ import os
 from datetime import datetime
 import urllib.parse
 
-# 1. إعدادات الهوية الفائقة (لجعل الـ APK يبدو احترافياً)
-st.set_page_config(page_title="LabPro Smart System", page_icon="🔬", layout="wide")
+# 1. إعدادات الهوية الفائقة (لجعل التطبيق يبدو احترافياً على الأندرويد)
+st.set_page_config(page_title="LabPro Enterprise", page_icon="🔬", layout="wide")
 
-# إخفاء عناصر المتصفح وتحسين الشكل
+# تحسين مظهر الواجهة بالـ CSS (لإخفاء عناصر المتصفح)
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .stApp { background-color: #f8f9fa; direction: rtl; text-align: right; }
-    .wa-btn { background-color: #25D366; color: white; padding: 10px; border-radius: 5px; text-decoration: none; font-weight: bold; }
+    .wa-btn { background-color: #25D366; color: white; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block; }
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    .stTabs [data-baseweb="tab"] { background-color: #e9ecef; border-radius: 5px; padding: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. نظام قاعدة البيانات المطور
+# 2. نظام قاعدة البيانات المطور (حفظ آلي)
 DB_FILE = "advanced_lab_db.csv"
 
 def save_data(df):
@@ -33,32 +35,32 @@ def load_data():
 if 'df' not in st.session_state:
     st.session_state.df = load_data()
 
-# المرجع الطبي للنتائج
+# المرجع الطبي (Normal Ranges)
 NR = {"Glucose": [70, 126], "CBC": [12, 16], "HbA1c": [4, 5.6], "Urea": [15, 45]}
 
 # 3. واجهة التطبيق الرئيسية
-st.title("🔬 منظومة إدارة المختبر الذكية")
+st.title("🔬 منظومة المختبر الذكية - الإصدار الاحترافي")
 
-tabs = st.tabs(["📝 تسجيل مريض", "📊 لوحة التحكم والنتائج", "💰 التقارير المالية", "⚙️ الإعدادات"])
+tabs = st.tabs(["📝 تسجيل مريض", "🔍 البحث والسجلات", "💰 التقارير المالية", "⚙️ الإدارة"])
 
-# --- التبويب 1: التسجيل المطور ---
+# --- التبويب 1: التسجيل الذكي ---
 with tabs[0]:
     with st.form("main_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         with c1:
-            p_name = st.text_input("اسم المريض الثلاثي")
-            p_test = st.selectbox("نوع الفحص المخبري", list(NR.keys()))
+            p_name = st.text_input("اسم المريض")
+            p_test = st.selectbox("نوع الفحص", list(NR.keys()))
             p_res = st.number_input("النتيجة", format="%.2f")
         with c2:
             p_phone = st.text_input("رقم الهاتف (964xxxxxxxxx)")
-            p_price = st.number_input("سعر الفحص (IQD)", value=15000, step=500)
-            p_paid = st.number_input("المبلغ الواصل", value=15000, step=500)
+            p_price = st.number_input("سعر الفحص (IQD)", value=15000)
+            p_paid = st.number_input("المبلغ الواصل", value=15000)
         
-        staff = st.text_input("👤 توقيع المحلل")
+        staff = st.text_input("👤 توقيع المحلل المسؤول")
         
-        if st.form_submit_button("إصدار النتيجة وحفظها"):
+        if st.form_submit_button("إصدار النتيجة وحفظ البيانات"):
             if p_name and staff:
-                # منطق تشخيص الحالة تلقائياً
+                # منطق التشخيص التلقائي
                 status = "طبيعي"
                 if p_res < NR[p_test][0]: status = "منخفض"
                 elif p_res > NR[p_test][1]: status = "مرتفع"
@@ -69,51 +71,60 @@ with tabs[0]:
                 
                 st.session_state.df = pd.concat([st.session_state.df, new_entry], ignore_index=True)
                 save_data(st.session_state.df)
-                st.success(f"✅ تم تسجيل حالة {p_name} بنجاح!")
+                st.success(f"✅ تم الحفظ بنجاح للمريض: {p_name}")
+                st.balloons()
             else:
-                st.error("⚠️ يرجى ملء الحقول الأساسية (الاسم والمحلل)")
+                st.error("⚠️ يرجى ملء الاسم واسم المحلل")
 
-# --- التبويب 2: التحليل البياني والواتساب ---
+# --- التبويب 2: البحث المطور والواتساب ---
 with tabs[1]:
+    search = st.text_input("🔍 ابحث بالاسم أو برقم الهاتف:")
     if not st.session_state.df.empty:
-        col_list, col_chart = st.columns([1, 1])
+        # تصفية البحث
+        f_df = st.session_state.df[
+            st.session_state.df['المريض'].str.contains(search, na=False) | 
+            st.session_state.df['الهاتف'].astype(str).str.contains(search, na=False)
+        ]
         
-        with col_list:
-            st.subheader("📋 السجلات الأخيرة")
-            st.dataframe(st.session_state.df.tail(10), use_container_width=True)
+        st.dataframe(f_df.tail(10), use_container_width=True)
+        
+        if not f_df.empty:
+            sel_p = st.selectbox("اختر مريضاً لإرسال النتيجة:", f_df['المريض'].unique())
+            row = f_df[f_df['المريض'] == sel_p].iloc[-1]
             
-            # اختيار مريض لإرسال واتساب أو رؤية تاريخه
-            target_p = st.selectbox("اختر مريضاً لإرسال النتيجة:", st.session_state.df['المريض'].unique())
-            p_row = st.session_state.df[st.session_state.df['المريض'] == target_p].iloc[-1]
+            # رابط الواتساب المحسن
+            msg = f"مرحباً {row['المريض']}%0Aفحص: {row['الفحص']}%0Aالنتيجة: {row['النتيجة']}%0Aالحالة: {row['الحالة']}"
+            wa_link = f"https://wa.me/{row['الهاتف']}?text={msg}"
+            st.markdown(f'<a href="{wa_link}" target="_blank" class="wa-btn">📲 إرسال عبر واتساب</a>', unsafe_allow_html=True)
             
-            msg = f"مرحبا {p_row['المريض']}%0Aفحصك: {p_row['الفحص']}%0Aالنتيجة: {p_row['النتيجة']}%0Aالحالة: {p_row['الحالة']}"
-            wa_link = f"https://wa.me/{p_row['الهاتف']}?text={msg}"
-            st.markdown(f'<a href="{wa_link}" target="_blank" class="wa-btn">📲 إرسال إلى واتساب المريض</a>', unsafe_allow_html=True)
+            # مخطط بياني لمتابعة حالة المريض نفسه
+            st.subheader(f"📈 تاريخ فحص {row['الفحص']} لـ {sel_p}")
+            p_history = st.session_state.df[st.session_state.df['المريض'] == sel_p]
+            fig_p = px.line(p_history, x='التاريخ', y='النتيجة', markers=True)
+            st.plotly_chart(fig_p, use_container_width=True)
 
-        with col_chart:
-            st.subheader("📈 إحصائيات الحالات")
-            fig = px.pie(st.session_state.df, names='الحالة', color='الحالة', 
-                         color_discrete_map={'طبيعي':'green', 'مرتفع':'red', 'منخفض':'blue'})
-            st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("لا توجد بيانات للعرض حالياً.")
-
-# --- التبويب 3: الإدارة المالية ---
+# --- التبويب 3: الإحصائيات المالية ---
 with tabs[2]:
     if not st.session_state.df.empty:
-        total_income = st.session_state.df['الواصل'].sum()
-        total_debts = (st.session_state.df['السعر'] - st.session_state.df['الواصل']).sum()
+        total_in = st.session_state.df['الواصل'].sum()
+        total_debt = (st.session_state.df['السعر'] - st.session_state.df['الواصل']).sum()
         
         m1, m2 = st.columns(2)
-        m1.metric("إجمالي الإيرادات", f"{total_income:,} IQD")
-        m2.metric("إجمالي الديون (باقي)", f"{total_debts:,} IQD", delta_color="inverse")
+        m1.metric("إجمالي الإيرادات (IQD)", f"{total_in:,}")
+        m2.metric("إجمالي الديون (باقي)", f"{total_debt:,}")
         
-        fig_revenue = px.bar(st.session_state.df, x='التاريخ', y='الواصل', title="حركة الدخل اليومية")
-        st.plotly_chart(fig_revenue, use_container_width=True)
+        # مخطط توزيع الفحوصات
+        fig_pie = px.pie(st.session_state.df, names='الفحص', title="نسبة طلب الفحوصات")
+        st.plotly_chart(fig_pie, use_container_width=True)
 
-# --- التبويب 4: الإعدادات ---
+# --- التبويب 4: الإدارة ---
 with tabs[3]:
-    st.subheader("⚙️ إدارة النظام")
-    if st.button("📥 تحميل قاعدة البيانات كملف Excel"):
-        st.session_state.df.to_csv("backup.csv", index=False)
-        st.write("تم تجهيز نسخة احتياطية باسم backup.csv في السيرفر.")
+    pwd = st.text_input("رمز الإدارة", type="password")
+    if pwd == "2026":
+        st.download_button("📥 تحميل قاعدة البيانات (Excel)", 
+                           st.session_state.df.to_csv(index=False).encode('utf-8-sig'), 
+                           "lab_backup.csv", "text/csv")
+        if st.button("🔴 تصفير البيانات نهائياً"):
+            st.session_state.df = pd.DataFrame(columns=st.session_state.df.columns)
+            save_data(st.session_state.df)
+            st.rerun()
