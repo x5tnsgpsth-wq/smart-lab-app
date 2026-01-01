@@ -8,135 +8,130 @@ import time
 # 1. إعدادات الصفحة
 st.set_page_config(page_title="Smart Lab System", page_icon="🔬", layout="wide")
 
-# 2. نظام التحقق من الدخول (Login System)
+# 2. وظائف إدارة الإعدادات (الاسم وكلمة المرور)
+SETTINGS_FILE = "settings.csv"
+
+def load_settings():
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            df_settings = pd.read_csv(SETTINGS_FILE)
+            name = df_settings['lab_name'].iloc[0]
+            pwd = str(df_settings['password'].iloc[0])
+            return name, pwd
+        except:
+            return "مختبر التحليلات الافتراضي", "1234"
+    return "مختبر التحليلات الافتراضي", "1234"
+
+# تحميل الإعدادات في جلسة العمل
+if 'lab_name' not in st.session_state or 'lab_password' not in st.session_state:
+    name, pwd = load_settings()
+    st.session_state.lab_name = name
+    st.session_state.lab_password = pwd
+
+# 3. نظام التحقق من الدخول
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 
-# دالة واجهة الدخول الجميلة
 def login_page():
     st.markdown("""
         <style>
         .login-container {
-            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-            padding: 50px;
-            border-radius: 20px;
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+            padding: 60px;
+            border-radius: 30px;
             text-align: center;
             color: white;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
             margin-top: 50px;
+            border: 1px solid rgba(255,255,255,0.1);
         }
         .stButton>button {
-            background-color: #ffffff;
-            color: #1e3a8a;
+            background: #3b82f6;
+            color: white;
             font-weight: bold;
-            border-radius: 10px;
+            border-radius: 12px;
             width: 100%;
             height: 50px;
-            transition: 0.3s;
-        }
-        .stButton>button:hover {
-            background-color: #f0f0f0;
-            transform: scale(1.02);
+            border: none;
         }
         </style>
         <div class="login-container">
-            <h1 style='font-size: 50px;'>🔬</h1>
-            <h2>مرحباً بكم في نظام المختبر الذكي</h2>
-            <p>يرجى إدخال رمز الوصول للمتابعة إلى لوحة التحكم</p>
+            <div style="font-size: 60px; margin-bottom: 10px;">🧬</div>
+            <h1 style='font-size: 35px; margin-bottom: 5px;'>نظام الإدارة المخبرية</h1>
+            <p style='opacity: 0.8;'>أهلاً بك في بوابة الدخول الآمنة</p>
         </div>
     """, unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1,2,1])
+    _, col2, _ = st.columns([1,1.5,1])
     with col2:
-        password = st.text_input("رمز الدخول", type="password", placeholder="أدخل الرمز هنا...")
-        if st.button("دخول إلى المختبر"):
-            if password == "1234": # يمكنك تغيير الرمز هنا
+        st.write("")
+        input_pwd = st.text_input("أدخل رمز الوصول الخاص بالمختبر", type="password")
+        if st.button("فتح النظام"):
+            if input_pwd == st.session_state.lab_password:
                 st.session_state.authenticated = True
-                with st.spinner('جاري تهيئة النظام الطبي...'):
-                    time.sleep(1.5)
+                st.success("تم التحقق بنجاح")
+                time.sleep(1)
                 st.rerun()
             else:
-                st.error("رمز الدخول غير صحيح، يرجى المحاولة مرة أخرى.")
+                st.error("رمز الدخول غير صحيح")
 
-# 3. إدارة البيانات (تستمر فقط بعد الدخول)
+# 4. تشغيل البرنامج
 if not st.session_state.authenticated:
     login_page()
 else:
-    # زر تسجيل الخروج في الشريط الجانبي
-    if st.sidebar.button("تسجيل الخروج 🚪"):
+    # الشريط الجانبي لتسجيل الخروج
+    st.sidebar.markdown(f"### 👨‍نيابة عن: \n**{st.session_state.lab_name}**")
+    if st.sidebar.button("تسجيل الخروج"):
         st.session_state.authenticated = False
         st.rerun()
 
     DB_FILE = "lab_pro_v32.csv"
-    SETTINGS_FILE = "settings.csv"
-
-    @st.cache_data
-    def get_nr():
-        return {"Glucose": [70, 126], "CBC": [12, 16], "HbA1c": [4, 5.6], "Urea": [15, 45]}
-
-    def load_settings():
-        if os.path.exists(SETTINGS_FILE):
-            try: return pd.read_csv(SETTINGS_FILE)['lab_name'].iloc[0]
-            except: return "مختبر التحليلات الافتراضي"
-        return "مختبر التحليلات الافتراضي"
-
-    if 'lab_name' not in st.session_state:
-        st.session_state.lab_name = load_settings()
-
     if 'df' not in st.session_state:
         st.session_state.df = pd.read_csv(DB_FILE) if os.path.exists(DB_FILE) else pd.DataFrame(columns=["التاريخ", "المريض", "الفحص", "النتيجة", "الحالة", "المحلل", "الهاتف", "ملاحظات"])
 
-    # واجهة البرنامج الرئيسية (بعد الدخول)
+    # واجهة البرنامج الرئيسية
     st.markdown(f"""
-        <div style="background-color: #f8fafc; padding: 20px; border-radius: 10px; border-right: 10px solid #1e3a8a; margin-bottom: 20px;">
-            <h1 style="color: #1e3a8a; margin: 0;">🔬 {st.session_state.lab_name}</h1>
-            <p style="color: #64748b;">نظام الإدارة المخبرية المتكامل</p>
+        <div style="background-color: white; padding: 25px; border-radius: 15px; border-left: 8px solid #3b82f6; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 25px;">
+            <h1 style="color: #1e3a8a; margin: 0; display: inline-block;">🔬 {st.session_state.lab_name}</h1>
+            <span style="float: left; color: #94a3b8;">{datetime.now().strftime('%Y-%m-%d')}</span>
         </div>
     """, unsafe_allow_html=True)
 
-    tabs = st.tabs(["📝 إدخال البيانات", "📄 عرض التقرير", "📊 الإحصائيات", "⚙️ الإعدادات"])
+    tabs = st.tabs(["📝 العمليات", "📄 التقارير", "⚙️ الإعدادات"])
 
-    # --- التبويب 1: إدخال البيانات ---
-    with tabs[0]:
-        NR = get_nr()
-        with st.form("entry_form"):
+    with tabs[0]: # إدخال البيانات
+        with st.form("lab_form"):
             c1, c2 = st.columns(2)
             with c1:
-                p_phone = st.text_input("رقم هاتف المريض")
-                p_name = st.text_input("اسم المريض بالكامل")
+                p_name = st.text_input("اسم المريض")
+                p_test = st.selectbox("الفحص", ["Glucose", "CBC", "HbA1c", "Urea"])
             with c2:
-                p_test = st.selectbox("نوع الفحص المطلوبة", list(NR.keys()))
-                p_res = st.number_input("النتيجة المخبرية", step=0.01, format="%.2f")
+                p_res = st.number_input("النتيجة", format="%.2f")
+                p_phone = st.text_input("رقم الهاتف")
             
-            if st.form_submit_button("حفظ البيانات في السجل"):
-                status = "طبيعي"
-                if p_res < NR[p_test][0]: status = "منخفض"
-                elif p_res > NR[p_test][1]: status = "مرتفع"
-                new_row = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), p_name, p_test, p_res, status, "المختبر", p_phone, ""]], columns=st.session_state.df.columns)
+            if st.form_submit_button("حفظ"):
+                new_row = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), p_name, p_test, p_res, "طبيعي", "المختبر", p_phone, ""]], columns=st.session_state.df.columns)
                 st.session_state.df = pd.concat([st.session_state.df, new_row], ignore_index=True)
                 st.session_state.df.to_csv(DB_FILE, index=False)
-                st.toast("✅ تم الحفظ بنجاح")
+                st.toast("تم الحفظ!")
 
-    # --- التبويب 2: التقرير ---
-    with tabs[1]:
+    with tabs[1]: # عرض التقارير
         if not st.session_state.df.empty:
             target = st.selectbox("اختر المريض:", st.session_state.df['المريض'].unique())
             data = st.session_state.df[st.session_state.df['المريض'] == target].iloc[-1]
-            st.markdown(f"""
-            <div style="border: 2px solid #1e3a8a; padding: 30px; border-radius: 15px; background: white;">
-                <h2 style="text-align:center;">{st.session_state.lab_name}</h2>
-                <hr>
-                <p><b>الاسم:</b> {data['المريض']}</p>
-                <p><b>الفحص:</b> {data['الفحص']}</p>
-                <p style="font-size: 30px; color: red;"><b>النتيجة: {data['النتيجة']}</b></p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.info(f"عرض آخر فحص لـ: {target}")
+            st.write(data)
 
-    # --- التبويب 4: الإعدادات ---
-    with tabs[3]:
+    with tabs[2]: # الإعدادات (تغيير الاسم وكلمة المرور)
+        st.subheader("⚙️ إعدادات النظام")
         new_name = st.text_input("تعديل اسم المختبر:", value=st.session_state.lab_name)
-        if st.button("حفظ التغييرات"):
-            pd.DataFrame({'lab_name': [new_name]}).to_csv(SETTINGS_FILE, index=False)
+        new_pwd = st.text_input("تعيين رمز دخول جديد (Password):", value=st.session_state.lab_password, type="password")
+        
+        if st.button("حفظ الإعدادات"):
+            # حفظ في ملف csv
+            pd.DataFrame({'lab_name': [new_name], 'password': [new_pwd]}).to_csv(SETTINGS_FILE, index=False)
             st.session_state.lab_name = new_name
-            st.success("تم تحديث الاسم!")
+            st.session_state.lab_password = new_pwd
+            st.success("✅ تم تحديث بيانات المختبر ورمز الدخول!")
+            time.sleep(1)
             st.rerun()
