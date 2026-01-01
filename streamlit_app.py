@@ -3,104 +3,94 @@ import pandas as pd
 from datetime import datetime
 import urllib.parse
 
-# 1. إعدادات الصفحة (ثيم فاتح وبسيط لسرعة التحميل)
-st.set_page_config(page_title="Lab System Pro", layout="wide")
+# 1. إعدادات الصفحة
+st.set_page_config(page_title="المختبر الذكي Pro", layout="wide")
 
-# تنسيق CSS للعربية ولتحسين مظهر الأزرار
+# تنسيق المظهر (ثيم احترافي)
 st.markdown("""
 <style>
     * { direction: rtl; text-align: right; }
-    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #007bff; color: white; }
-    .status-box { padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #ddd; }
+    .metric-container { background-color: #f0f2f6; padding: 20px; border-radius: 10px; border: 1px solid #d1d5db; }
+    .stButton>button { border-radius: 8px; background-color: #007bff; color: white; height: 3em; }
 </style>
 """, unsafe_allow_html=True)
 
-# 2. إدارة البيانات (باستخدام Session State لضمان السرعة وعدم الضياع)
+# 2. إدارة البيانات (Session State لسرعة التابلت)
 if 'data_list' not in st.session_state:
     st.session_state.data_list = []
 
 # 3. واجهة التطبيق
-st.title("🧪 نظام إدارة المختبر المتكامل")
+st.sidebar.title("🧪 التحكم بالمختبر")
+menu = st.sidebar.selectbox("انتقل إلى:", ["📈 لوحة الإحصائيات والأرباح", "📥 تسجيل فحص ودفع", "📋 سجل المرضى والحسابات", "💾 التصدير والإدارة"])
 
-# القائمة الجانبية
-menu = st.sidebar.radio("القائمة الرئيسية", ["إضافة فحص جديد", "سجل الفحوصات والحسابات", "تصدير البيانات"])
-
-if menu == "إضافة فحص جديد":
-    st.subheader("📝 تسجيل بيانات المريض")
-    with st.form("entry_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            name = st.text_input("اسم المريض الثلاثي")
-            contact = st.text_input("رقم الهاتف (أو المعرف)")
-            test_type = st.selectbox("نوع الفحص", ["CBC", "Glucose", "TSH", "Urea", "Creatinine", "Vitamin D"])
-        with col2:
-            result = st.number_input("النتيجة", format="%.2f")
-            total_price = st.number_input("السعر الكلي (د.ع)", step=500)
-            paid_amount = st.number_input("المبلغ المدفوع (د.ع)", step=500)
-        
-        submit = st.form_submit_button("حفظ وإرسال")
-        
-        if submit and name:
-            new_entry = {
-                "التاريخ": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "المريض": name,
-                "التواصل": contact,
-                "الفحص": test_type,
-                "النتيجة": result,
-                "السعر": total_price,
-                "المدفوع": paid_amount,
-                "المتبقي": total_price - paid_amount,
-                "الحالة": "مرتفع ⚠️" if result > 110 else "طبيعي ✅"
-            }
-            st.session_state.data_list.append(new_entry)
-            st.success(f"تم حفظ بيانات {name} بنجاح!")
-
-elif menu == "سجل الفحوصات والحسابات":
-    st.subheader("📋 سجل المرضى")
+# --- الشاشة 1: لوحة الإحصائيات ---
+if menu == "📈 لوحة الإحصائيات والأرباح":
+    st.title("الوضع العام للمختبر")
     if st.session_state.data_list:
         df = pd.DataFrame(st.session_state.data_list)
         
-        # محرك بحث بسيط
-        search = st.text_input("🔍 بحث عن مريض")
-        if search:
-            df = df[df['المريض'].str.contains(search)]
-            
-        st.dataframe(df, use_container_width=True)
+        # الصف الأول: المقاييس المالية
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("إجمالي الإيرادات (د.ع)", f"{df['المدفوع'].sum():,.0f}")
+        with c2:
+            st.metric("الديون المتبقية (د.ع)", f"{df['المتبقي'].sum():,.0f}", delta=f"{df['المتبقي'].sum():,.0f}", delta_color="inverse")
+        with c3:
+            high_risk = len(df[df['الحالة'] == "مرتفع ⚠️"])
+            st.metric("الحالات المرتفعة اليوم", high_risk)
         
         st.divider()
-        st.subheader("📤 إرسال النتائج")
-        patient_sel = st.selectbox("اختر مريضاً لإرسال نتيجته:", df['المريض'].unique())
         
-        if patient_sel:
-            row = df[df['المريض'] == patient_sel].iloc[-1]
-            msg = f"مرحباً {row['المريض']}، نتيجتك لفحص {row['الفحص']} هي {row['النتيجة']}. المتبقي بذمتكم: {row['المتبقي']} د.ع."
-            msg_encoded = urllib.parse.quote(msg)
-            
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown(f'<a href="https://wa.me/{row["التواصل"]}?text={msg_encoded}" target="_blank" style="text-decoration:none;"><div style="background-color:#25D366; color:white; padding:15px; border-radius:10px; text-align:center;">WhatsApp</div></a>', unsafe_allow_html=True)
-            with c2:
-                st.markdown(f'<a href="https://t.me/share/url?url={msg_encoded}&text={row["التواصل"]}" target="_blank" style="text-decoration:none;"><div style="background-color:#0088cc; color:white; padding:15px; border-radius:10px; text-align:center;">Telegram</div></a>', unsafe_allow_html=True)
+        # الصف الثاني: الرسوم البيانية
+        col_left, col_right = st.columns(2)
+        with col_left:
+            st.subheader("أكثر الفحوصات طلباً")
+            st.bar_chart(df['الفحص'].value_counts())
+        with col_right:
+            st.subheader("توزيع الحالات الطبيعية/المرتفعة")
+            # تبسيط العرض للتابلت
+            st.write(df['الحالة'].value_counts())
     else:
-        st.info("السجل فارغ حالياً.")
+        st.info("لا توجد بيانات كافية لعرض الإحصائيات. ابدأ بتسجيل أول مريض.")
 
-elif menu == "تصدير البيانات":
-    st.subheader("💾 حفظ نسخة Excel")
+# --- الشاشة 2: تسجيل فحص ودفع (نفس الكود السابق مع تحسين) ---
+elif menu == "📥 تسجيل فحص ودفع":
+    st.title("إدخال بيانات مريض جديد")
+    with st.form("lab_entry", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            name = st.text_input("اسم المريض")
+            phone = st.text_input("رقم الواتساب (بدون أصفار)")
+            test = st.selectbox("نوع الفحص", ["CBC", "HbA1c", "Glucose", "TSH", "Lipid Profile"])
+        with col2:
+            res = st.number_input("النتيجة", format="%.2f")
+            price = st.number_input("سعر الفحص", step=500)
+            paid = st.number_input("المبلغ الواصل", step=500)
+        
+        if st.form_submit_button("حفظ وحساب"):
+            entry = {
+                "التاريخ": datetime.now().strftime("%Y-%m-%d"),
+                "المريض": name, "التواصل": phone, "الفحص": test,
+                "النتيجة": res, "السعر": price, "المدفوع": paid,
+                "المتبقي": price - paid,
+                "الحالة": "مرتفع ⚠️" if res > 110 else "طبيعي ✅"
+            }
+            st.session_state.data_list.append(entry)
+            st.success(f"تم الحفظ! المتبقي على المريض: {price-paid} د.ع")
+
+# --- باقي الأقسام (السجل والتصدير) تتبع نفس المنطق المستقر ---
+elif menu == "📋 سجل المرضى والحسابات":
+    st.title("سجل المراجعات")
     if st.session_state.data_list:
-        df_export = pd.DataFrame(st.session_state.data_list)
-        csv = df_export.to_csv(index=False).encode('utf-8-sig')
-        
-        # الطريقة الأكثر استقراراً للتحميل
-        st.download_button(
-            label="📥 اضغط هنا لتحميل الملف فوراً",
-            data=csv,
-            file_name=f"lab_report_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
-        
-        st.divider()
-        if st.button("🗑️ مسح السجل بالكامل"):
+        df_log = pd.DataFrame(st.session_state.data_list)
+        st.dataframe(df_log, use_container_width=True)
+    else: st.write("السجل فارغ.")
+
+elif menu == "💾 التصدير والإدارة":
+    st.title("إدارة البيانات")
+    if st.session_state.data_list:
+        csv = pd.DataFrame(st.session_state.data_list).to_csv(index=False).encode('utf-8-sig')
+        st.download_button("📥 تحميل سجل الإكسل الكامل", csv, "lab_report.csv", "text/csv")
+        if st.button("🗑️ مسح كل البيانات"):
             st.session_state.data_list = []
             st.rerun()
-    else:
-        st.warning("لا توجد بيانات لتصديرها.")
