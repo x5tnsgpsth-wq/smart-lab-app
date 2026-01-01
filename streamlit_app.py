@@ -4,96 +4,103 @@ import plotly.express as px
 import os
 from datetime import datetime
 
-# 1. إعدادات الهوية الفائقة
-st.set_page_config(page_title="LabPro Smart System v26", page_icon="🧪", layout="wide")
+# 1. إعدادات الهوية والجمالية
+st.set_page_config(page_title="Smart Lab System v27", page_icon="🔬", layout="wide")
 
-# تصميم الواجهة المحسن
+# تصميم CSS لجعل النتيجة تبدو كأنها ورقة رسمية مطبوعة
 st.markdown("""
     <style>
-    .stApp { background-color: #f0f2f6; direction: rtl; text-align: right; }
-    .wa-btn { background-color: #25D366; color: white; padding: 10px; border-radius: 8px; text-decoration: none; font-weight: bold; display: block; text-align: center; }
-    .medical-note { background-color: #fff3cd; padding: 10px; border-right: 5px solid #ffc107; border-radius: 5px; }
+    .report-box {
+        border: 2px solid #333;
+        padding: 20px;
+        border-radius: 10px;
+        background-color: white;
+        color: black;
+        direction: rtl;
+        font-family: 'Arial';
+    }
+    .report-header { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+    .status-badge { padding: 5px 10px; border-radius: 5px; color: white; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. إدارة البيانات والمخزن
-DB_FILE = "advanced_lab_v26.csv"
+# 2. إدارة البيانات
+DB_FILE = "lab_pro_v27.csv"
 if 'df' not in st.session_state:
-    st.session_state.df = pd.read_csv(DB_FILE) if os.path.exists(DB_FILE) else pd.DataFrame(columns=["التاريخ", "المريض", "الفحص", "النتيجة", "الحالة", "التوصية", "المحلل", "الهاتف", "السعر", "الواصل"])
+    if os.path.exists(DB_FILE):
+        st.session_state.df = pd.read_csv(DB_FILE)
+    else:
+        st.session_state.df = pd.DataFrame(columns=["التاريخ", "المريض", "الفحص", "النتيجة", "الحالة", "المحلل", "الهاتف", "ملاحظات"])
 
-if 'inventory' not in st.session_state:
-    st.session_state.inventory = {"Glucose Strips": 100, "CBC Reagent": 50, "HbA1c Kits": 20}
-
-# خوارزمية التشخيص الذكي
-def get_advice(test, val):
-    limits = {"Glucose": [70, 126], "CBC": [12, 16], "HbA1c": [4, 5.6], "Urea": [15, 45]}
-    if val < limits[test][0]: return "⚠️ النتيجة منخفضة: يرجى مراجعة الطبيب لتقييم الحالة."
-    if val > limits[test][1]: return "🚨 النتيجة مرتفعة: تنبيه لمراجعة فورية واتباع الحمية."
-    return "✅ النتيجة ضمن النطاق الطبيعي."
+# مرجع النطاقات الطبيعية
+NR = {"Glucose": [70, 126], "CBC": [12, 16], "HbA1c": [4, 5.6], "Urea": [15, 45]}
 
 # 3. واجهة التطبيق
-st.title("🔬 منظومة المختبر الذكي - الإصدار v26")
+st.title("🔬 منظومة المختبر الذكي - الإصدار v27")
 
-tabs = st.tabs(["📝 الإدخال والتشخيص", "🔍 سجل المرضى", "📦 المستودع", "📊 الأداء المالي"])
+tabs = st.tabs(["📝 إدخال وفحص", "📄 إصدار تقرير", "📊 إحصائيات المختبر"])
 
-# --- التبويب 1: الإدخال مع التشخيص الذكي ---
+# --- التبويب 1: إدخال البيانات الذكي ---
 with tabs[0]:
-    with st.form("main_form", clear_on_submit=True):
+    with st.form("entry_form"):
         c1, c2 = st.columns(2)
         with c1:
-            name = st.text_input("اسم المريض")
-            test_type = st.selectbox("نوع الفحص", ["Glucose", "CBC", "HbA1c", "Urea"])
-            res = st.number_input("النتيجة", format="%.2f")
+            p_phone = st.text_input("رقم هاتف المريض")
+            # ميزة التعبئة التلقائية إذا كان المريض مسجلاً سابقاً
+            existing_p = st.session_state.df[st.session_state.df['الهاتف'] == p_phone]
+            default_name = existing_p['المريض'].iloc[-1] if not existing_p.empty else ""
+            
+            p_name = st.text_input("اسم المريض", value=default_name)
+            p_test = st.selectbox("نوع الفحص", list(NR.keys()))
         with c2:
-            phone = st.text_input("رقم الواتساب")
-            price = st.number_input("السعر", value=15000)
-            paid = st.number_input("الواصل", value=15000)
-        
-        staff = st.text_input("👤 المحلل المسؤول")
-        
-        if st.form_submit_button("تحليل وحفظ"):
-            if name and staff:
-                advice = get_advice(test_type, res)
-                status = "طبيعي" if "ضمن النطاق" in advice else ("مرتفع" if "مرتفعة" in advice else "منخفض")
-                
-                # تحديث المخزن تلقائياً
-                inv_key = f"{test_type} Kits" if test_type != "Glucose" else "Glucose Strips"
-                if inv_key in st.session_state.inventory: st.session_state.inventory[inv_key] -= 1
-                
-                new_data = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d %H:%M"), name, test_type, res, status, advice, staff, phone, price, paid]], columns=st.session_state.df.columns)
-                st.session_state.df = pd.concat([st.session_state.df, new_data], ignore_index=True)
-                st.session_state.df.to_csv(DB_FILE, index=False)
-                
-                st.success("✅ تم الحفظ")
-                st.info(f"💡 التوصية الطبية: {advice}")
+            p_res = st.number_input("النتيجة", format="%.2f")
+            p_note = st.text_area("ملاحظات إضافية")
+            p_staff = st.text_input("اسم المحلل")
 
-# --- التبويب 2: السجلات مع مخطط التتبع ---
+        if st.form_submit_button("حفظ ومعالجة"):
+            status = "طبيعي"
+            if p_res < NR[p_test][0]: status = "منخفض"
+            elif p_res > NR[p_test][1]: status = "مرتفع"
+            
+            new_data = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), p_name, p_test, p_res, status, p_staff, p_phone, p_note]], columns=st.session_state.df.columns)
+            st.session_state.df = pd.concat([st.session_state.df, new_data], ignore_index=True)
+            st.session_state.df.to_csv(DB_FILE, index=False)
+            st.success("✅ تم الحفظ بنجاح")
+
+# --- التبويب 2: إصدار التقرير الرسمي ---
 with tabs[1]:
-    search = st.text_input("🔍 ابحث بالاسم:")
-    filtered = st.session_state.df[st.session_state.df['المريض'].str.contains(search, na=False)]
-    st.dataframe(filtered.tail(10), use_container_width=True)
-    
-    if not filtered.empty:
-        sel_p = st.selectbox("اختر مريضاً لمتابعة تاريخه:", filtered['المريض'].unique())
-        p_history = st.session_state.df[st.session_state.df['المريض'] == sel_p]
-        fig_line = px.line(p_history, x='التاريخ', y='النتيجة', color='الفحص', title=f"📈 مسار نتائج {sel_p}")
-        st.plotly_chart(fig_line, use_container_width=True)
-
-# --- التبويب 3: إدارة المستودع الذكية ---
-with tabs[2]:
-    st.subheader("📦 حالة المخزون الحالية")
-    for item, qty in st.session_state.inventory.items():
-        if qty < 10: st.error(f"🚨 {item}: {qty} (يرجى الطلب فوراً!)")
-        else: st.success(f"✅ {item}: {qty}")
-
-# --- التبويب 4: التقارير المالية المتقدمة ---
-with tabs[3]:
+    st.subheader("📄 عرض وطباعة النتيجة")
     if not st.session_state.df.empty:
-        col1, col2 = st.columns(2)
-        col1.metric("إجمالي الدخل", f"{st.session_state.df['الواصل'].sum():,} IQD")
-        col2.metric("الديون المتبقية", f"{(st.session_state.df['السعر'] - st.session_state.df['الواصل']).sum():,} IQD")
+        target_name = st.selectbox("اختر المريض لعرض تقريره:", st.session_state.df['المريض'].unique())
+        report_data = st.session_state.df[st.session_state.df['المريض'] == target_name].iloc[-1]
         
-        # مخطط نمو الدخل حسب الأيام
-        daily_revenue = st.session_state.df.groupby(st.session_state.df['التاريخ'].str[:10])['الواصل'].sum().reset_index()
-        fig_revenue = px.area(daily_revenue, x='التاريخ', y='الواصل', title="📊 منحنى الدخل اليومي")
-        st.plotly_chart(fig_revenue, use_container_width=True)
+        # تصميم التقرير
+        st.markdown(f"""
+        <div class="report-box">
+            <div class="report-header">
+                <h2>مختبر التحليلات المرضية الذكي</h2>
+                <p>تاريخ الفحص: {report_data['التاريخ']}</p>
+            </div>
+            <table style="width:100%; text-align:right; margin-top:20px;">
+                <tr><td><b>اسم المريض:</b></td><td>{report_data['المريض']}</td></tr>
+                <tr><td><b>نوع الفحص:</b></td><td>{report_data['الفحص']}</td></tr>
+                <tr><td><b>النتيجة:</b></td><td><span style="font-size:20px; color:blue;">{report_data['النتيجة']}</span></td></tr>
+                <tr><td><b>النطاق الطبيعي:</b></td><td>{NR[report_data['الفحص']][0]} - {NR[report_data['الفحص']][1]}</td></tr>
+                <tr><td><b>الحالة:</b></td><td>{report_data['الحالة']}</td></tr>
+            </table>
+            <div style="margin-top:20px; border-top:1px solid #eee; padding-top:10px;">
+                <b>ملاحظات الطبيب:</b> {report_data['ملاحظات']}
+            </div>
+            <div style="margin-top:30px; text-align:left;">
+                <p>توقيع المحلل: {report_data['المحلل']}</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.info("لا توجد بيانات لإصدار تقارير.")
+
+# --- التبويب 3: الإحصائيات ---
+with tabs[2]:
+    if not st.session_state.df.empty:
+        fig = px.pie(st.session_state.df, names='الحالة', title="تحليل الحالات العامة")
+        st.plotly_chart(fig)
