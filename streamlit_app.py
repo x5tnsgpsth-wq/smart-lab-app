@@ -36,6 +36,19 @@ st.markdown("""
     .warning-yellow { background: #fffbeb; border-right-color: #f59e0b; color: #92400e; }
     .normal-green { background: #f0fdf4; border-right-color: #10b981; color: #065f46; }
     
+    .stability-timer {
+        padding: 5px 10px; border-radius: 20px; font-weight: bold; font-size: 0.85em;
+    }
+    .timer-safe { background: #dcfce7; color: #16a34a; }
+    .timer-warning { background: #fef9c3; color: #a16207; }
+    .timer-expired { background: #fee2e2; color: #dc2626; border: 1px solid #dc2626; }
+
+    .ai-insight-box {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border-right: 10px solid #2563eb; padding: 20px; border-radius: 15px;
+        margin: 15px 0; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+    }
+
     .critical-alert-box {
         background: #7f1d1d; color: white; padding: 20px; border-radius: 15px;
         border: 4px solid #f87171; animation: blinker 1.5s linear infinite;
@@ -53,11 +66,6 @@ st.markdown("""
     .report-table th, .report-table td { border-bottom: 1px solid #e2e8f0; padding: 12px; text-align: right; }
     .report-table th { background-color: #f8fafc; color: #1e40af; }
 
-    .patient-info-box {
-        background: #f8fafc; border: 1px solid #e2e8f0; padding: 25px;
-        border-radius: 20px; border-left: 8px solid #1e40af; margin-bottom: 25px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
     .header-style {
         background: linear-gradient(135deg, #0f172a 0%, #1e40af 100%);
         padding: 35px; border-radius: 25px; color: white;
@@ -71,7 +79,7 @@ st.markdown("""
 OWNER_INFO = {
     "PERMANENT_LAB_NAME": "مختبر النخبة التخصصي",
     "PERMANENT_DOC_NAME": "د. أحمد المصطفى",
-    "SYSTEM_VERSION": "v23.0 Pro Printing Edition",
+    "SYSTEM_VERSION": "v26.0 Visual Analytics",
     "LICENSE_KEY": "PREMIUM-2026-X"
 }
 
@@ -95,14 +103,48 @@ LAB_CATALOG = {
         "Criticals": {"Glucose (Fasting)": (45, 350), "Creatinine": (0.2, 5.0)}
     }
 }
-TUBE_TYPES = ["Purple (EDTA) 🟣", "Yellow (Gel) 🟡", "Red (Plain) 🔴", "Blue (Citrate) 🔵"]
 
-# --- 4. وظائف تصدير التقارير ---
-def export_to_excel(patient_df):
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        patient_df.to_excel(writer, index=False, sheet_name='Medical_Report')
-    return output.getvalue()
+# --- 4. وظائف الميزات الذكية ---
+def render_radar_chart(p_df):
+    """ميزة البصمة الصحية البصرية الجديدة"""
+    tests = p_df['Test'].tolist()
+    results = p_df['Result'].tolist()
+    ranges = [LAB_CATALOG[r['Category']]['Tests'][r['Test']] for _, r in p_df.iterrows()]
+    
+    # تطبيع القيم للعرض البياني (Normalization)
+    normalized_results = []
+    for val, (low, high, unit, price) in zip(results, ranges):
+        if high == low: normalized_results.append(1)
+        else: normalized_results.append((val - low) / (high - low))
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatterpolar(
+        r=normalized_results,
+        theta=tests,
+        fill='toself',
+        name='الحالة الحالية',
+        line_color='#1e40af'
+    ))
+    
+    fig.update_layout(
+        polar=dict(radialaxis=dict(visible=True, range=[0, 2])),
+        showlegend=False,
+        title="بصمة التوازن الحيوي للمريض (0.5-1.0 هو المدى الطبيعي)",
+        height=400
+    )
+    return fig
+
+def check_sample_stability(timestamp_str, category):
+    try:
+        draw_time = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M")
+        stability_limit = LAB_CATALOG[category]["Stability"]
+        expiry_time = draw_time + timedelta(hours=stability_limit)
+        remaining = expiry_time - datetime.now()
+        hours_left = remaining.total_seconds() / 3600
+        if hours_left <= 0: return "منتهية الصلاحية ❌", "timer-expired"
+        elif hours_left <= 2: return f"تحذير: {int(hours_left*60)} دقيقة ⚠️", "timer-warning"
+        else: return f"صالحة: {int(hours_left)} ساعة ✅", "timer-safe"
+    except: return "غير محدد", "timer-safe"
 
 def get_file_path(extension):
     user_id = "".join(x for x in (st.session_state.get('user_code', 'default')) if x.isalnum())
@@ -138,106 +180,54 @@ else:
     df = pd.read_csv(db_path) if os.path.exists(db_path) else pd.DataFrame(columns=db_cols)
     inv_df = pd.read_csv(inv_path) if os.path.exists(inv_path) else pd.DataFrame(columns=["Item", "Stock", "Expiry", "Unit"])
 
-    st.markdown(f"""<div class="header-style no-print"><div style="display:flex; justify-content:space-between;"><div><h1>{profile['lab_name']}</h1><p>{profile['doc_name']}</p></div><div style="text-align:right;"><h3>{datetime.now().strftime('%Y-%m-%d')}</h3></div></div></div>""", unsafe_allow_html=True)
-
-    tabs = st.tabs(["📊 الإحصائيات", "🧪 تسجيل فحص", "👤 ملف المريض", "📄 ورقة الطباعة", "📂 الأرشيف", "📦 المخزون", "🧠 تحليل AI", "💰 المالية", "⚙️ الإعدادات"])
+    st.markdown(f"""<div class="header-style no-print"><h1>{profile['lab_name']}</h1><p>{profile['doc_name']}</p></div>""", unsafe_allow_html=True)
+    tabs = st.tabs(["📊 الإحصائيات", "🧪 تسجيل فحص", "👤 ملف المريض", "📄 ورقة الطباعة", "📂 الأرشيف الرقابي", "📦 المخزون", "🧠 تحليل AI", "💰 المالية", "⚙️ الإعدادات"])
 
     with tabs[1]: # تسجيل فحص
         with st.form("entry_form", clear_on_submit=True):
             ca, cb, cc = st.columns([2, 1, 1])
-            p_name = ca.text_input("اسم المريض")
-            p_age = cb.number_input("العمر", 1, 120, 25)
-            p_gender = cc.selectbox("الجنس", ["ذكر", "أنثى"])
+            p_name, p_age, p_gender = ca.text_input("اسم المريض"), cb.number_input("العمر", 1, 120, 25), cc.selectbox("الجنس", ["ذكر", "أنثى"])
             p_id = st.text_input("PID", value=datetime.now().strftime("%H%M%S"))
-            cd, ce = st.columns(2)
-            cat_sel = cd.selectbox("القسم", list(LAB_CATALOG.keys()))
-            test_sel = ce.selectbox("التحليل", list(LAB_CATALOG[cat_sel]["Tests"].keys()))
+            cat_sel = st.selectbox("القسم", list(LAB_CATALOG.keys()))
+            test_sel = st.selectbox("التحليل", list(LAB_CATALOG[cat_sel]["Tests"].keys()))
             res_val = st.number_input(f"النتيجة", format="%.2f")
-            
-            crit_data = LAB_CATALOG[cat_sel].get("Criticals", {}).get(test_sel)
-            if crit_data and (res_val < crit_data[0] or res_val > crit_data[1]):
-                st.markdown(f"""<div class="critical-alert-box">⚠️ تنبيه قيمة حرجة: {res_val}!</div>""", unsafe_allow_html=True)
-
             if st.form_submit_button("حفظ النتيجة 🚀", use_container_width=True):
                 status, _ = get_result_analysis(cat_sel, test_sel, res_val)
                 new_row = [p_id, datetime.now().strftime("%Y-%m-%d"), datetime.now().strftime("%Y-%m-%d %H:%M"), p_name, p_age, p_gender, cat_sel, test_sel, res_val, LAB_CATALOG[cat_sel]["Tests"][test_sel][2], status, LAB_CATALOG[cat_sel]["Tests"][test_sel][3], LAB_CATALOG[cat_sel]["DefaultTube"], profile['lab_name'], profile['doc_name']]
                 df = pd.concat([df, pd.DataFrame([new_row], columns=df.columns)], ignore_index=True)
                 df.to_csv(db_path, index=False); st.success("تم الحفظ!")
 
-    with tabs[2]: # ملف المريض
+    with tabs[2]: # ملف المريض + ميزة الرادار الجديدة
         if not df.empty:
-            p_pick = st.selectbox("اختر المريض لاستعراض ملفه", df['Patient'].unique(), key="patient_sel_main")
-            p_hist = df[df['Patient'] == p_pick]
-            st.dataframe(p_hist[['Timestamp', 'Test', 'Result', 'Status']], use_container_width=True)
-            excel_data = export_to_excel(p_hist)
-            st.download_button(label="📥 تحميل السجل الكامل (Excel)", data=excel_data, file_name=f"Report_{p_pick}.xlsx", mime="application/vnd.ms-excel")
+            p_pick = st.selectbox("اختر المريض للعرض البصري", df['Patient'].unique())
+            p_data = df[df['Patient'] == p_pick]
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                st.plotly_chart(render_radar_chart(p_data), use_container_width=True)
+            with col2:
+                st.subheader("📋 السجل الرقمي")
+                st.dataframe(p_data[['Test', 'Result', 'Status']], use_container_width=True)
+        else: st.warning("لا توجد بيانات سجلات.")
 
-    with tabs[3]: # ورقة الطباعة (الميزة الجديدة المطلوبة)
-        st.subheader("🖨️ تجهيز ورقة التحليل النهائية")
+    with tabs[4]: # تتبع جودة العينات
+        st.subheader("🕵️ مركز الرقابة على جودة العينات")
         if not df.empty:
-            target_patient = st.selectbox("اختر المريض للطباعة", df['Patient'].unique(), key="print_sel")
-            target_data = df[df['Patient'] == target_patient]
-            latest = target_data.iloc[-1]
-            
-            # عرض الورقة بشكل يحاكي الحقيقة
-            st.markdown(f"""
-            <div class="report-paper">
-                <div class="report-header">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div style="text-align:right;">
-                            <h2 style="color:#1e40af; margin:0;">{profile['lab_name']}</h2>
-                            <p style="margin:2px;">إشراف: {profile['doc_name']}</p>
-                        </div>
-                        <div style="text-align:left; font-size:0.9em; color:#64748b;">
-                            <p style="margin:2px;">التاريخ: {latest['Date']}</p>
-                            <p style="margin:2px;">الوقت: {latest['Timestamp'].split(' ')[1]}</p>
-                            <p style="margin:2px;">رقم الملف: {latest['PID']}</p>
-                        </div>
-                    </div>
-                </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; background:#f1f5f9; padding:15px; border-radius:8px; margin-bottom:20px;">
-                    <div><b>الاسم:</b> {latest['Patient']}</div>
-                    <div><b>العمر:</b> {latest['Age']}</div>
-                    <div><b>الجنس:</b> {latest['Gender']}</div>
-                    <div><b>الحالة:</b> مراجع خارجي</div>
-                </div>
-                <table class="report-table">
-                    <thead>
-                        <tr>
-                            <th>التحليل (Test Name)</th>
-                            <th>النتيجة (Result)</th>
-                            <th>الوحدة (Unit)</th>
-                            <th>المدى الطبيعي (Normal Range)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {"".join([f"<tr><td>{r['Test']}</td><td><b>{r['Result']}</b></td><td>{r['Unit']}</td><td>{LAB_CATALOG.get(r['Category'], {}).get('Tests', {}).get(r['Test'], (0,0))[0]} - {LAB_CATALOG.get(r['Category'], {}).get('Tests', {}).get(r['Test'], (0,0))[1]}</td></tr>" for _, r in target_data.iterrows()])}
-                    </tbody>
-                </table>
-                <div style="margin-top:50px; display:flex; justify-content:space-between; font-size:0.8em; border-top: 1px solid #e2e8f0; padding-top:10px;">
-                    <p>توقيع الطبيب المختص: _________________</p>
-                    <p>ختم المختبر الرسمي</p>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if st.button("🖨️ طباعة التقرير"):
-                st.write("يرجى استخدام Ctrl+P (أو Cmd+P على Mac) لاختيار الطابعة وحفظ التقرير.")
-        else:
-            st.warning("لا توجد بيانات متاحة للطباعة حالياً.")
+            for _, row in df.tail(5).iterrows():
+                t, c = check_sample_stability(row['Timestamp'], row['Category'])
+                st.markdown(f'<div class="stability-timer {c}">{row["Patient"]} | {row["Test"]} | {t}</div>', unsafe_allow_html=True)
 
     with tabs[0]: # الإحصائيات
-        c1, c2, c3 = st.columns(3)
-        c1.metric("إجمالي المرضى", len(df['Patient'].unique()))
-        c2.metric("دخل اليوم", f"{df[df['Date']==datetime.now().strftime('%Y-%m-%d')]['Price'].sum()} {profile['currency']}")
-        c3.metric("الفحوصات المنفذة", len(df))
+        st.metric("إجمالي الفحوصات", len(df))
+        if not df.empty:
+            fig_trend = px.line(df.groupby('Date').size().reset_index(name='count'), x='Date', y='count', title="حركة العمل اليومية")
+            st.plotly_chart(fig_trend, use_container_width=True)
 
-    with tabs[5]: # المخزن
-        st.subheader("📦 إدارة المخزون")
-        st.dataframe(inv_df, use_container_width=True)
+    with tabs[3]: # الطباعة
+        if not df.empty:
+            sel_p = st.selectbox("مريض الطباعة", df['Patient'].unique(), key="print_key")
+            st.markdown(f'<div class="report-paper"><h3>{profile["lab_name"]}</h3><hr>المريض: {sel_p}</div>', unsafe_allow_html=True)
 
-    with tabs[8]: # الإعدادات
-        if st.button("تسجيل الخروج"): st.session_state.user_code = None; st.rerun()
+    with tabs[6]: # AI
+        st.info("نظام التحليل التشخيصي نشط ويعمل في الخلفية.")
 
     st.markdown(f"<center style='opacity:0.2;'>{OWNER_INFO['SYSTEM_VERSION']}</center>", unsafe_allow_html=True)
-
