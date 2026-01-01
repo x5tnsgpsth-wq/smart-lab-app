@@ -2,80 +2,63 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 from datetime import datetime
-import urllib.parse
 
-# إعداد الصفحة
-st.set_page_config(page_title="المختبر الذكي Pro", layout="wide")
+# 1. إعداد الصفحة
+st.set_page_config(page_title="المختبر الاحترافي", layout="wide")
 st.markdown("""<style> * { direction: rtl; text-align: right; } </style>""", unsafe_allow_html=True)
 
-# قاعدة البيانات (تحديث الجداول لإضافة الحسابات)
-conn = sqlite3.connect("lab_finance.db", check_same_thread=False)
-cursor = conn.cursor()
-cursor.execute("""CREATE TABLE IF NOT EXISTS patients 
-               (id INTEGER PRIMARY KEY, name TEXT, contact TEXT, test TEXT, result REAL, 
-               total_price REAL, paid REAL, status TEXT, date TEXT)""")
+# 2. قاعدة البيانات
+conn = sqlite3.connect("lab_stable.db", check_same_thread=False)
+c = conn.cursor()
+c.execute("""CREATE TABLE IF NOT EXISTS data 
+             (id INTEGER PRIMARY KEY, name TEXT, test TEXT, result REAL, price INTEGER, paid INTEGER, date TEXT)""")
 conn.commit()
 
-# القائمة الجانبية
-st.sidebar.title("🧪 إدارة المختبر")
-choice = st.sidebar.radio("انتقل إلى:", ["📊 الإحصائيات", "📥 تسجيل فحص ودفع", "📋 السجل والديون", "⚙️ الإدارة"])
+# 3. القائمة الجانبية
+menu = st.sidebar.radio("القائمة:", ["تسجيل فحص", "السجل المالي", "تحميل البيانات"])
 
-# --- 1. الإحصائيات ---
-if choice == "📊 الإحصائيات":
-    st.title("الوضع المالي والعام")
-    df = pd.read_sql("SELECT * FROM patients", conn)
-    if not df.empty:
-        c1, c2, c3 = st.columns(3)
-        with c1: st.metric("إجمالي الفحوصات", len(df))
-        with c2: st.metric("إجمالي الإيرادات", f"{df['paid'].sum():,.0f} د.ع")
-        with c3: st.metric("الديون المتبقية", f"{(df['total_price'] - df['paid']).sum():,.0f} د.ع")
-        st.bar_chart(df['test'].value_counts())
-
-# --- 2. تسجيل فحص ودفع ---
-elif choice == "📥 تسجيل فحص ودفع":
-    st.title("إدخال فحص وحسابات")
-    with st.form("lab_form", clear_on_submit=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            name = st.text_input("اسم المريض")
-            contact = st.text_input("رقم التواصل")
-            test = st.selectbox("نوع الفحص", ["Glucose", "HbA1c", "Urea", "CBC"])
-        with col2:
-            res = st.number_input("النتيجة", format="%.2f")
-            price = st.number_input("سعر الفحص الكلي", step=250)
-            paid = st.number_input("المبلغ المدفوع حالياً", step=250)
+if menu == "تسجيل فحص":
+    st.header("📝 إدخال بيانات المريض")
+    with st.form("input_form"):
+        name = st.text_input("اسم المريض")
+        test = st.selectbox("الفحص", ["Glucose", "HbA1c", "Urea", "CBC"])
+        res = st.number_input("النتيجة", format="%.2f")
+        price = st.number_input("السعر الكلي", value=0)
+        paid = st.number_input("المبلغ المدفوع", value=0)
         
-        if st.form_submit_button("حفظ البيانات"):
-            if name:
-                status = "طبيعي" if res < 120 else "مرتفع ⚠️"
-                dt = datetime.now().strftime("%Y-%m-%d %H:%M")
-                cursor.execute("INSERT INTO patients (name, contact, test, result, total_price, paid, status, date) VALUES (?,?,?,?,?,?,?,?)", 
-                               (name, contact, test, res, price, paid, status, dt))
-                conn.commit()
-                st.success(f"تم الحفظ! المتبقي على المريض: {price - paid} د.ع")
+        if st.form_submit_button("حفظ"):
+            dt = datetime.now().strftime("%Y-%m-%d %H:%M")
+            c.execute("INSERT INTO data (name, test, result, price, paid, date) VALUES (?,?,?,?,?,?)",
+                      (name, test, res, price, paid, dt))
+            conn.commit()
+            st.success("تم الحفظ بنجاح")
 
-# --- 3. السجل والديون ---
-elif choice == "📋 السجل والديون":
-    st.title("سجل المرضى")
-    df = pd.read_sql("SELECT * FROM patients ORDER BY id DESC", conn)
+elif menu == "السجل المالي":
+    st.header("📋 سجل المرضى والحسابات")
+    df = pd.read_sql("SELECT name as 'المريض', test as 'الفحص', result as 'النتيجة', price as 'السعر', paid as 'المدفوع', (price-paid) as 'المتبقي', date as 'التاريخ' FROM data", conn)
     if not df.empty:
-        # إضافة عمود للمتبقي (Debt)
-        df['المتبقي'] = df['total_price'] - df['paid']
-        st.dataframe(df[['name', 'test', 'result', 'total_price', 'paid', 'المتبقي', 'date']], use_container_width=True)
+        # عرض الجدول بشكل يسمح بالنسخ (Copy) كبديل للتحميل إذا فشل الزر
+        st.write("يمكنك تحديد البيانات ونسخها مباشرة إلى Excel")
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("لا توجد سجلات")
 
-# --- 4. الإدارة والتحميل ---
-elif choice == "⚙️ الإدارة":
-    st.title("تصدير وإدارة البيانات")
-    df_exp = pd.read_sql("SELECT * FROM patients", conn)
+elif menu == "تحميل البيانات":
+    st.header("📥 تصدير السجل")
+    df_export = pd.read_sql("SELECT * FROM data", conn)
     
-    if not df_exp.empty:
-        # حل مشكلة الزر: تحويل البيانات إلى CSV مع ترميز UTF-8-SIG لدعم العربية في إكسل
-        csv_data = df_exp.to_csv(index=False).encode('utf-8-sig')
+    if not df_export.empty:
+        # الطريقة البديلة: تحويل البيانات لنص CSV وعرضها في مربع نصي ليتم نسخها
+        csv = df_export.to_csv(index=False)
+        st.text_area("إذا لم يعمل زر التحميل أدناه، قم بنسخ هذا النص ولصقه في ملف نصي بصيغة .csv", value=csv, height=200)
         
+        # محاولة أخيرة لزر التحميل باستخدام Key مختلف
         st.download_button(
-            label="📥 اضغط هنا لتحميل سجل الإكسل",
-            data=csv_data,
-            file_name="lab_report.csv",
-            mime="text/csv",
-            key='download-csv' # إضافة مفتاح فريد للزر
+            label="📥 اضغط هنا للتحميل",
+            data=csv.encode('utf-8-sig'),
+            file_name='lab_data.csv',
+            mime='text/csv',
+            key='btn_download_v2'
         )
+    else:
+        st.warning("السجل فارغ.")
