@@ -1,3 +1,10 @@
+# أضف هذا الجزء في أول سطر بعد استيراد المكتبات
+st.set_page_config(
+    page_title="نظام المختبر الذكي",
+    page_icon="🧪", # ستظهر هذه الأيقونة عند تثبيته
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 import streamlit as st
 import pandas as pd
 from datetime import datetime
