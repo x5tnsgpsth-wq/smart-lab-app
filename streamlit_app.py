@@ -1,71 +1,66 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import os
 
-# إعدادات الصفحة - النسخة الشاملة v3.0
-st.set_page_config(page_title="المختبر المتكامل", layout="wide")
+# 1. إعداد الصفحة
+st.set_page_config(page_title="المختبر الاحترافي - نظام الأمان", layout="wide")
 st.markdown("<style> * { direction: rtl; text-align: right; } </style>", unsafe_allow_html=True)
 
-# 1. تهيئة البيانات في الذاكرة
-if 'patients' not in st.session_state: st.session_state.patients = []
+# 2. وظيفة الحفظ في ملف (Backup)
+def save_to_backup(data):
+    df = pd.DataFrame(data)
+    df.to_csv("backup_lab_data.csv", index=False, encoding='utf-8-sig')
+
+# تحميل البيانات من النسخة الاحتياطية عند تشغيل التطبيق أول مرة
+if 'patients' not in st.session_state:
+    if os.path.exists("backup_lab_data.csv"):
+        st.session_state.patients = pd.read_csv("backup_lab_data.csv").to_dict('records')
+    else:
+        st.session_state.patients = []
+
 if 'inventory' not in st.session_state:
     st.session_state.inventory = {"Glucose": 50, "CBC": 30, "HbA1c": 20}
 
-# 2. القائمة الجانبية (Sidebar)
-st.sidebar.title("🏥 لوحة التحكم")
-user = st.sidebar.selectbox("الموظف الحالي:", ["د. محمد", "المحلل علي", "المحللة سارة"])
-page = st.sidebar.radio("القائمة:", ["الرئيسية (تسجيل فحص)", "المخزن والنواقص", "السجل المالي العام"])
+# 3. الواجهة البرمجية
+st.sidebar.title("🛡️ أمن البيانات")
+menu = st.sidebar.radio("انتقل إلى:", ["تسجيل فحص", "المخزن", "استعادة النسخة الاحتياطية"])
 
-# --- الصفحة الرئيسية: تسجيل الفحوصات ---
-if page == "الرئيسية (تسجيل فحص)":
-    st.header(f"مرحباً {user} - تسجيل فحص جديد")
-    
-    with st.form("lab_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            name = st.text_input("اسم المريض")
-            test = st.selectbox("نوع الفحص", list(st.session_state.inventory.keys()))
-        with col2:
-            res = st.number_input("النتيجة", format="%.2f")
-            paid = st.number_input("المبلغ المدفوع (د.ع)", step=500)
-            
-        if st.form_submit_button("حفظ البيانات"):
+if menu == "تسجيل فحص":
+    st.header("📝 إدخال بيانات")
+    with st.form("entry_form"):
+        name = st.text_input("اسم المريض")
+        test = st.selectbox("الفحص", list(st.session_state.inventory.keys()))
+        res = st.number_input("النتيجة", format="%.2f")
+        paid = st.number_input("المبلغ الواصل", step=500)
+        
+        if st.form_submit_button("حفظ وتأمين"):
             if st.session_state.inventory[test] > 0:
-                # خصم من المخزن
                 st.session_state.inventory[test] -= 1
-                # حفظ في السجل
                 entry = {
                     "التاريخ": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "المريض": name, "الفحص": test, "النتيجة": res,
-                    "المبلغ": paid, "الموظف": user
+                    "المريض": name, "الفحص": test, "النتيجة": res, "المبلغ": paid
                 }
                 st.session_state.patients.append(entry)
-                st.success(f"تم الحفظ! المتبقي من مواد {test}: {st.session_state.inventory[test]}")
+                # حفظ نسخة احتياطية فورية في ملف
+                save_to_backup(st.session_state.patients)
+                st.success("✅ تم الحفظ وتأمين نسخة احتياطية!")
             else:
-                st.error(f"عذراً، مادة {test} نفدت من المخزن!")
+                st.error("⚠️ المادة نفدت!")
 
-# --- صفحة المخزن ---
-elif page == "المخزن والنواقص":
-    st.header("📦 حالة المخزن")
-    # عرض كميات المخزن
-    for item, qty in st.session_state.inventory.items():
-        color = "red" if qty < 5 else "green"
-        st.markdown(f"**{item}:** <span style='color:{color}'>{qty} قطعة متبقية</span>", unsafe_allow_html=True)
-    
-    st.divider()
-    st.subheader("➕ تحديث كمية المخزن")
-    item_to_add = st.selectbox("اختر المادة لتزويدها:", list(st.session_state.inventory.keys()))
-    new_qty = st.number_input("الكمية المضافة:", min_value=1)
-    if st.button("تحديث المخزن"):
-        st.session_state.inventory[item_to_add] += new_qty
-        st.success(f"تم إضافة {new_qty} إلى {item_to_add}")
+elif menu == "المخزن":
+    st.header("📦 حالة المخزن الحالية")
+    st.write(st.session_state.inventory)
 
-# --- صفحة السجل المالي ---
-elif page == "السجل المالي العام":
-    st.header("📋 السجل الشامل")
-    if st.session_state.patients:
-        df = pd.DataFrame(st.session_state.patients)
-        st.table(df)
-        st.metric("إجمالي الدخل اليومي", f"{df['المبلغ'].sum():,} د.ع")
+elif menu == "استعادة النسخة الاحتياطية":
+    st.header("📂 إدارة الملفات")
+    if os.path.exists("backup_lab_data.csv"):
+        df_backup = pd.read_csv("backup_lab_data.csv")
+        st.write("آخر بيانات تم تأمينها:")
+        st.dataframe(df_backup)
+        
+        # زر لتحميل النسخة الاحتياطية يدوياً للتابلت
+        csv = df_backup.to_csv(index=False).encode('utf-8-sig')
+        st.download_button("📥 تحميل النسخة الاحتياطية للجهاز", csv, "manual_backup.csv", "text/csv")
     else:
-        st.info("لا توجد بيانات حالياً.")
+        st.warning("لا توجد نسخة احتياطية مسجلة بعد.")
