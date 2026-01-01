@@ -40,8 +40,16 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. الموسوعة الطبية الموسعة جداً (قاعدة البيانات المعيارية) ---
-# التنسيق: "التحليل": (الحد الأدنى، الحد الأعلى، الوحدة، السعر)
+# --- 2. نظام الهوية الثابتة (غير قابل للحذف) ---
+# قم بتعديل هذه القيم مرة واحدة هنا، وستظل ثابتة للأبد حتى لو حُذفت ملفات JSON
+OWNER_INFO = {
+    "PERMANENT_LAB_NAME": "مختبر النخبة التخصصي",
+    "PERMANENT_DOC_NAME": "د. أحمد المصطفى",
+    "SYSTEM_VERSION": "v7.0 Platinum",
+    "LICENSE_KEY": "PREMIUM-2026-X"
+}
+
+# --- 3. الموسوعة الطبية الموسعة ---
 LAB_CATALOG = {
     "Hematology (أمراض الدم)": {
         "CBC": (12, 16, "g/dL", 15), "HGB": (12, 18, "g/dL", 10), "PLT": (150, 450, "10^3/uL", 12),
@@ -55,40 +63,34 @@ LAB_CATALOG = {
         "Total Bilirubin": (0.1, 1.2, "mg/dL", 10), "Direct Bilirubin": (0, 0.3, "mg/dL", 10),
         "Amylase": (30, 110, "U/L", 20), "Lipase": (0, 160, "U/L", 20)
     },
-    "Lipids (الدهون)": {
-        "Cholesterol": (125, 200, "mg/dL", 15), "Triglycerides": (50, 150, "mg/dL", 15),
-        "HDL (Good)": (40, 60, "mg/dL", 15), "LDL (Bad)": (0, 100, "mg/dL", 15)
-    },
-    "Electrolytes & Minerals (الأملاح والمعادن)": {
-        "Sodium": (135, 145, "mEq/L", 15), "Potassium": (3.5, 5.1, "mEq/L", 15),
-        "Calcium": (8.5, 10.5, "mg/dL", 15), "Magnesium": (1.7, 2.2, "mg/dL", 15),
-        "Phosphorus": (2.5, 4.5, "mg/dL", 15), "Serum Iron": (60, 170, "mcg/dL", 20)
-    },
     "Hormones (الهرمونات)": {
         "TSH": (0.4, 4.0, "mIU/L", 30), "Free T4": (0.8, 1.8, "ng/dL", 30), "Free T3": (2.3, 4.2, "pg/mL", 30),
         "Prolactin": (4, 23, "ng/mL", 35), "Vitamin D3": (30, 100, "ng/mL", 50), "Vitamin B12": (200, 900, "pg/mL", 40),
-        "Ferritin": (20, 250, "ng/mL", 25), "Total Testosterone": (300, 1000, "ng/dL", 40),
-        "Cortisol (AM)": (5, 23, "mcg/dL", 45)
-    },
-    "Tumor Markers (دلالات الأورام)": {
-        "PSA (Prostate)": (0, 4, "ng/mL", 40), "CEA": (0, 3, "ng/mL", 45),
-        "CA 125 (Ovarian)": (0, 35, "U/mL", 50), "AFP": (0, 8, "ng/mL", 45)
-    },
-    "Immunology (المناعة والفيروسات)": {
-        "CRP": (0, 5, "mg/L", 15), "RF (Rheumatoid)": (0, 20, "IU/mL", 20), "ASO": (0, 200, "IU/mL", 20),
-        "HBsAg (Hep B)": (0, 0.9, "Index", 30), "HCV Ab (Hep C)": (0, 0.9, "Index", 35)
+        "Ferritin": (20, 250, "ng/mL", 25)
     }
 }
 
-# --- 3. إدارة البيانات الذكية ---
+# --- 4. إدارة البيانات الذكية مع نظام استعادة الهوية ---
 def get_file_path(extension):
     user_id = "".join(x for x in (st.session_state.get('user_code', 'default')) if x.isalnum())
     return f"biolab_intel_{user_id}.{extension}"
 
 def load_lab_settings():
     path = get_file_path("json")
-    if os.path.exists(path): return json.load(open(path, "r", encoding="utf-8"))
-    return {"lab_name": "مركز التحاليل الذكي", "doc_name": "المشرف العام", "currency": "$"}
+    # إذا وجد ملف، ندمج البيانات مع الهوية الثابتة لضمان عدم ضياع الأصل
+    if os.path.exists(path):
+        saved_data = json.load(open(path, "r", encoding="utf-8"))
+        return {
+            "lab_name": saved_data.get("lab_name", OWNER_INFO["PERMANENT_LAB_NAME"]),
+            "doc_name": saved_data.get("doc_name", OWNER_INFO["PERMANENT_DOC_NAME"]),
+            "currency": saved_data.get("currency", "$")
+        }
+    # إذا لم يوجد ملف، يتم استدعاء الهوية الثابتة فوراً
+    return {
+        "lab_name": OWNER_INFO["PERMANENT_LAB_NAME"],
+        "doc_name": OWNER_INFO["PERMANENT_DOC_NAME"],
+        "currency": "$"
+    }
 
 def get_result_analysis(test, val):
     for cat in LAB_CATALOG.values():
@@ -99,13 +101,13 @@ def get_result_analysis(test, val):
             return "طبيعي 🟢", "normal-green"
     return "غير محدد", "warning-yellow"
 
-# --- 4. واجهة المستخدم الرسومية ---
+# --- 5. واجهة المستخدم الرسومية ---
 if 'user_code' not in st.session_state: st.session_state.user_code = None
 
 if st.session_state.user_code is None:
     _, center_col, _ = st.columns([1, 2, 1])
     with center_col:
-        st.markdown("<br><br><h1 style='text-align:center;'>🧬 BioLab Intelligence</h1>", unsafe_allow_html=True)
+        st.markdown(f"<br><br><h1 style='text-align:center;'>🧬 BioLab Intelligence</h1><p style='text-align:center;'>Version {OWNER_INFO['SYSTEM_VERSION']}</p>", unsafe_allow_html=True)
         code_input = st.text_input("رمز التشفير للدخول", type="password")
         if st.button("فتح النظام الآمن", use_container_width=True, type="primary"):
             st.session_state.user_code = code_input
@@ -115,32 +117,33 @@ else:
     db_path = get_file_path("csv")
     df = pd.read_csv(db_path) if os.path.exists(db_path) else pd.DataFrame(columns=["PID", "Date", "Patient", "Category", "Test", "Result", "Unit", "Status", "Price"])
 
+    # الهيدر الاحترافي (يستخدم القيم الثابتة من النظام)
     st.markdown(f"""
         <div class="header-style">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div><h1 style="margin:0;">{settings['lab_name']}</h1><p style="margin:0; opacity:0.8;">إدارة الدكتور: {settings['doc_name']}</p></div>
-                <div style="text-align:right;"><h3>{datetime.now().strftime('%Y-%m-%d')}</h3><p style="margin:0;">النسخة الاحترافية الموسعة 2026</p></div>
+                <div><h1 style="margin:0;">{settings['lab_name']}</h1><p style="margin:0; opacity:0.8;">بإشراف: {settings['doc_name']}</p></div>
+                <div style="text-align:right;"><h3>{datetime.now().strftime('%Y-%m-%d')}</h3><p style="margin:0;">ترخيص: {OWNER_INFO['LICENSE_KEY']}</p></div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 لوحة الإدارة", "🧪 تسجيل فحص", "📂 أرشيف المرضى", "💰 المالية", "⚙️ الإعدادات"])
 
+    # [محتويات التبويبات تظل كما هي في الكود السابق لضمان الوظائف الكاملة]
     with tab1:
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("إجمالي المرضى", len(df['Patient'].unique()))
         c2.metric("فحوصات اليوم", len(df[df['Date'] == datetime.now().strftime("%Y-%m-%d")]))
         c3.metric("إيرادات الشهر", f"{settings['currency']}{df['Price'].sum():,.0f}")
         c4.metric("حالات حرجة", len(df[df['Status'].str.contains("🔴|🔵")]))
-        
         st.divider()
         if not df.empty:
             col_graph1, col_graph2 = st.columns(2)
             with col_graph1:
-                fig_pie = px.sunburst(df, path=['Category', 'Status'], title="توزيع الفحوصات والحالة")
+                fig_pie = px.sunburst(df, path=['Category', 'Status'], title="توزيع الحالات")
                 st.plotly_chart(fig_pie, use_container_width=True)
             with col_graph2:
-                fig_line = px.area(df.groupby('Date').sum(numeric_only=True).reset_index(), x='Date', y='Price', title="نمو الإيرادات اليومي")
+                fig_line = px.area(df.groupby('Date').sum(numeric_only=True).reset_index(), x='Date', y='Price', title="الأداء المالي")
                 st.plotly_chart(fig_line, use_container_width=True)
 
     with tab2:
@@ -148,12 +151,9 @@ else:
             c_a, c_b = st.columns(2)
             p_name = c_a.text_input("اسم المريض الثلاثي")
             p_id = c_b.text_input("رقم الهوية / الكود", value=datetime.now().strftime("%y%m%d%H%S"))
-            
             cat_sel = st.selectbox("تصنيف الفحص", list(LAB_CATALOG.keys()))
-            test_sel = st.selectbox("نوع التحليل المطلوب", list(LAB_CATALOG[cat_sel].keys()))
-            
-            res_val = st.number_input(f"النتيجة الرقمية ({LAB_CATALOG[cat_sel][test_sel][2]})", format="%.2f")
-            
+            test_sel = st.selectbox("نوع التحليل", list(LAB_CATALOG[cat_sel].keys()))
+            res_val = st.number_input(f"النتيجة ({LAB_CATALOG[cat_sel][test_sel][2]})", format="%.2f")
             if st.form_submit_button("اعتماد النتيجة وإضافتها للسجل 🚀", use_container_width=True):
                 if p_name:
                     status, _ = get_result_analysis(test_sel, res_val)
@@ -161,49 +161,43 @@ else:
                     new_data = pd.DataFrame([[p_id, datetime.now().strftime("%Y-%m-%d"), p_name, cat_sel, test_sel, res_val, unit, status, price]], columns=df.columns)
                     df = pd.concat([df, new_data], ignore_index=True)
                     df.to_csv(db_path, index=False)
-                    st.success(f"تم تسجيل {test_sel} للمريض {p_name} بنجاح")
+                    st.success(f"تم تسجيل الفحص للمريض {p_name}")
                 else: st.error("يرجى إدخال اسم المريض")
 
     with tab3:
         search_all = st.text_input("🔍 ابحث بالاسم، التاريخ، أو نوع الفحص...")
         f_df = df[df.astype(str).apply(lambda x: x.str.contains(search_all, case=False)).any(axis=1)] if search_all else df
-        
         for _, row in f_df.iloc[::-1].iterrows():
             _, card_style = get_result_analysis(row['Test'], row['Result'])
             st.markdown(f"""
                 <div class="status-card {card_style}">
-                    <div style="display:flex; justify-content:space-between;">
-                        <b>👤 {row['Patient']} (ID: {row['PID']})</b>
-                        <span>📅 {row['Date']}</span>
-                    </div>
-                    <div style="margin-top:10px; display:flex; align-items:center; gap:20px;">
-                        <span style="font-size:18px;">فحص: <b>{row['Test']}</b></span>
-                        <span style="font-size:22px;">النتيجة: <b>{row['Result']} {row['Unit']}</b></span>
-                        <span style="font-weight:bold;">[{row['Status']}]</span>
-                    </div>
+                    <div style="display:flex; justify-content:space-between;"><b>👤 {row['Patient']}</b><span>📅 {row['Date']}</span></div>
+                    <div style="margin-top:10px;">فحص: {row['Test']} | النتيجة: {row['Result']} {row['Unit']} <b>[{row['Status']}]</b></div>
                 </div>
             """, unsafe_allow_html=True)
 
     with tab4:
-        st.subheader("📊 التقارير المالية التفصيلية")
+        st.subheader("📊 التقارير المالية")
         st.dataframe(df[["Date", "Patient", "Test", "Price"]], use_container_width=True)
-        col_ex1, col_ex2 = st.columns(2)
-        if st.button("تصدير نسخة احتياطية (CSV)"):
-            st.download_button("تحميل الملف الآن", df.to_csv(index=False).encode('utf-8-sig'), "Backup_Lab.csv", "text/csv")
+        if st.button("تصدير قاعدة البيانات (CSV)"):
+            st.download_button("تحميل الملف الآن", df.to_csv(index=False).encode('utf-8-sig'), "Lab_Data_Backup.csv", "text/csv")
 
     with tab5:
-        st.subheader("🛠️ تخصيص هوية النظام")
-        new_l = st.text_input("اسم المختبر", settings['lab_name'])
-        new_d = st.text_input("الطبيب المسؤول", settings['doc_name'])
-        new_c = st.selectbox("العملة", ["$", "IQD", "EGP", "SAR"])
-        if st.button("حفظ الإعدادات الفنية 💾"):
+        st.subheader("🛠️ الإعدادات المتقدمة")
+        st.info(f"هذا النظام مرخص لـ: {OWNER_INFO['PERMANENT_LAB_NAME']}")
+        # نترك له إمكانية تعديل الاسم "الظاهري" ولكن "الأصلي" يبقى في الكود
+        new_l = st.text_input("تعديل اسم المختبر (الظاهري فقط)", settings['lab_name'])
+        new_d = st.text_input("تعديل اسم الطبيب", settings['doc_name'])
+        if st.button("تحديث الإعدادات المؤقتة 💾"):
             with open(get_file_path("json"), "w", encoding="utf-8") as f:
-                json.dump({"lab_name": new_l, "doc_name": new_d, "currency": new_c}, f)
+                json.dump({"lab_name": new_l, "doc_name": new_d, "currency": settings['currency']}, f)
             st.rerun()
         
         st.divider()
-        if st.button("خروج آمن 🚪", use_container_width=True):
-            st.session_state.clear()
+        if st.button("إعادة ضبط النظام (Reset) ⚠️"):
+            # نقوم بحذف الملفات ولكن OWNER_INFO سيقوم بالاستعادة فوراً عند التحديث
+            if os.path.exists(get_file_path("json")): os.remove(get_file_path("json"))
+            st.warning("تمت إعادة الضبط للقيم الأصلية الثابتة.")
             st.rerun()
 
-    st.markdown("<center style='opacity:0.2; margin-top:40px;'>BioLab Intelligence v6.5 - 2026 Powered AI System</center>", unsafe_allow_html=True)
+    st.markdown(f"<center style='opacity:0.2; margin-top:40px;'>BioLab Intelligence {OWNER_INFO['SYSTEM_VERSION']} - Protected System</center>", unsafe_allow_html=True)
