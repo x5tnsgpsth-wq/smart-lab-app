@@ -4,110 +4,88 @@ from datetime import datetime
 import os
 import urllib.parse
 
-# 1. إعدادات الصفحة والنمط العام
-st.set_page_config(page_title="مختبر التحليلات المتكامل - النسخة المؤمنة", layout="wide")
-st.markdown("<style> * { direction: rtl; text-align: right; } .stTabs [data-baseweb='tab-list'] { gap: 10px; } </style>", unsafe_allow_html=True)
+# 1. إعدادات الصفحة والنمط
+st.set_page_config(page_title="مختبر التحليلات - النظام الذكي", layout="wide")
+st.markdown("<style> * { direction: rtl; text-align: right; } </style>", unsafe_allow_html=True)
 
-# 2. وظائف تأمين البيانات (Backup System)
+# 2. تعريف المعدلات الطبيعية لكل فحص (يمكنك تعديلها حسب مختبرك)
+NORMAL_RANGES = {
+    "Glucose": {"min": 70, "max": 126, "unit": "mg/dL"},
+    "CBC (Hb)": {"min": 12, "max": 16, "unit": "g/dL"},
+    "HbA1c": {"min": 4, "max": 5.6, "unit": "%"},
+    "Urea": {"min": 15, "max": 45, "unit": "mg/dL"}
+}
+
+# 3. وظائف حفظ واستعادة البيانات
 def save_data(data):
-    df = pd.DataFrame(data)
-    df.to_csv("lab_database_backup.csv", index=False, encoding='utf-8-sig')
+    pd.DataFrame(data).to_csv("lab_smart_backup.csv", index=False, encoding='utf-8-sig')
 
-def load_data():
-    if os.path.exists("lab_database_backup.csv"):
-        return pd.read_csv("lab_database_backup.csv").to_dict('records')
-    return []
-
-# 3. تهيئة البيانات من النسخة الاحتياطية
 if 'patients' not in st.session_state:
-    st.session_state.patients = load_data()
+    if os.path.exists("lab_smart_backup.csv"):
+        st.session_state.patients = pd.read_csv("lab_smart_backup.csv").to_dict('records')
+    else:
+        st.session_state.patients = []
 
-if 'inv' not in st.session_state:
-    st.session_state.inv = {"Glucose": 100, "CBC": 100, "HbA1c": 50, "Urea": 50}
+# 4. التبويبات
+tab1, tab2, tab3 = st.tabs(["📝 إدخال ذكي", "📜 النتائج والتشخيص", "📦 الإدارة"])
 
-# 4. التبويبات الرئيسية
-tab1, tab2, tab3, tab4 = st.tabs(["📝 تسجيل الفحوصات", "📜 الوصل والباركود", "📦 المخزن والمالية", "🛡️ الأمان والأرشيف"])
-
-# --- التبويب 1: التسجيل ---
 with tab1:
-    st.subheader("إدخال بيانات مراجع")
-    with st.form("main_form", clear_on_submit=True):
-        staff_user = st.text_input("👤 اسم المحلل المسؤول (كتابة يدوية)")
-        st.divider()
+    st.subheader("تسجيل الفحص والتحليل التلقائي")
+    with st.form("smart_form", clear_on_submit=True):
+        staff = st.text_input("👤 اسم المحلل")
         c1, c2 = st.columns(2)
-        p_name = c1.text_input("اسم المريض الكامل")
-        p_test = c1.selectbox("نوع الفحص المجرى", list(st.session_state.inv.keys()))
-        p_res = c1.number_input("النتيجة المخبرية", format="%.2f")
+        name = c1.text_input("اسم المريض")
+        test = c1.selectbox("نوع الفحص", list(NORMAL_RANGES.keys()))
+        res = c1.number_input(f"النتيجة ({NORMAL_RANGES[test]['unit']})", format="%.2f")
         
-        p_price = c2.number_input("السعر الكلي", value=10000)
-        p_paid = c2.number_input("المبلغ المدفوع", value=10000)
-        p_phone = c2.text_input("رقم هاتف المريض")
+        price = c2.number_input("السعر", value=10000)
+        paid = c2.number_input("الواصل", value=10000)
+        phone = c2.text_input("رقم الهاتف")
         
-        if st.form_submit_button("حفظ وتأمين البيانات"):
-            if staff_user and p_name:
-                st.session_state.inv[p_test] -= 1
-                new_entry = {
-                    "التاريخ": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "المريض": p_name, "الفحص": p_test, "النتيجة": p_res,
-                    "الواصل": p_paid, "الدين": p_price - p_paid, 
-                    "الموظف": staff_user, "الهاتف": p_phone
-                }
-                st.session_state.patients.append(new_entry)
-                save_data(st.session_state.patients) # حفظ فوري في الملف
-                st.success(f"✅ تم الحفظ وتأمين النسخة الاحتياطية بواسطة {staff_user}")
-            else:
-                st.error("يرجى إدخال اسم الموظف والمريض!")
+        if st.form_submit_button("حفظ وتحليل"):
+            # تحديد حالة النتيجة تلقائياً
+            status = "طبيعي"
+            color = "green"
+            if res < NORMAL_RANGES[test]["min"]:
+                status = "منخفض"
+                color = "blue"
+            elif res > NORMAL_RANGES[test]["max"]:
+                status = "مرتفع"
+                color = "red"
+                
+            new_entry = {
+                "التاريخ": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "المريض": name, "الفحص": test, "النتيجة": res,
+                "الحالة": status, "اللون": color, "المحلل": staff,
+                "الواصل": paid, "الدين": price - paid, "الهاتف": phone
+            }
+            st.session_state.patients.append(new_entry)
+            save_data(st.session_state.patients)
+            st.success(f"تم الحفظ. حالة النتيجة: {status}")
 
-# --- التبويب 2: الوصل والباركود ---
 with tab2:
     if st.session_state.patients:
         df = pd.DataFrame(st.session_state.patients)
-        p_sel = st.selectbox("اختر المريض لإصدار الوصل:", df['المريض'].unique())
+        p_sel = st.selectbox("عرض تقرير المريض:", df['المريض'].unique())
         if p_sel:
             data = df[df['المريض'] == p_sel].iloc[-1]
-            qr_text = f"Patient:{data['المريض']}|Result:{data['النتيجة']}|By:{data['الموظف']}"
-            qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=120x120&data={urllib.parse.quote(qr_text)}"
-            
+            # توليد الوصل مع تلوين النتيجة حسب الحالة
             st.markdown(f"""
-            <div style="border:3px solid #000; padding:15px; background:white; color:black; border-radius:10px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h2 style="margin:0;">مختبر التحليلات المرضية</h2>
-                    <img src="{qr_url}">
-                </div>
-                <hr style="border:1px solid #000">
+            <div style="border:2px solid {data['اللون']}; padding:20px; border-radius:15px; background:white;">
+                <h2 style="color:{data['اللون']};">تقرير مخبري: {data['الحالة']}</h2>
+                <hr>
+                <p><b>المريض:</b> {data['المريض']} | <b>المحلل:</b> {data['المحلل']}</p>
+                <p><b>الفحص:</b> {data['الفحص']} | <b>النتيجة:</b> <span style="font-size:28px;">{data['النتيجة']}</span></p>
+                <p><b>المعدل الطبيعي:</b> {NORMAL_RANGES[data['الفحص']]['min']} - {NORMAL_RANGES[data['الفحص']]['max']} {NORMAL_RANGES[data['الفحص']]['unit']}</p>
                 <p><b>التاريخ:</b> {data['التاريخ']}</p>
-                <p><b>المريض:</b> {data['المريض']}</p>
-                <p><b>الفحص:</b> {data['الفحص']} | <b>النتيجة:</b> <span style="font-size:24px; color:red;">{data['النتيجة']}</span></p>
-                <p><b>المحلل المسؤول:</b> {data['الموظف']}</p>
-                <p><b>الحالة المالية:</b> مدفوع {data['الواصل']:,} | متبقي {data['الدين']:,}</p>
             </div>
             """, unsafe_allow_html=True)
-            st.info("💡 يمكن تصوير الشاشة لإرسال الوصل للمريض.")
     else: st.info("لا توجد بيانات سجلات.")
 
-# --- التبويب 3: المخزن والمالية ---
 with tab3:
+    st.subheader("📊 ملخص العمل")
     if st.session_state.patients:
-        df_fin = pd.DataFrame(st.session_state.patients)
-        c1, c2 = st.columns(2)
-        c1.metric("نقد الصندوق اليوم", f"{df_fin['الواصل'].sum():,} د.ع")
-        c2.metric("الديون الخارجية", f"{df_fin['الدين'].sum():,} د.ع", delta_color="inverse")
-    
-    st.write("📦 حالة المخزن:")
-    st.table(pd.DataFrame(st.session_state.inv.items(), columns=["المادة", "الكمية"]))
-
-# --- التبويب 4: الأمان والأرشيف ---
-with tab4:
-    st.subheader("🛡️ مركز الأمان")
-    if st.session_state.patients:
-        df_arch = pd.DataFrame(st.session_state.patients)
-        st.write("إدارة البيانات:")
-        csv = df_arch.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("📥 تحميل الأرشيف بالكامل (Excel)", csv, "lab_full_backup.csv", "text/csv")
-        
-        if st.button("🔄 تحديث يدوي للنسخة الاحتياطية"):
-            save_data(st.session_state.patients)
-            st.success("تم تحديث ملف النسخة الاحتياطية بنجاح!")
-        
-        st.dataframe(df_arch)
-    else: st.warning("لا توجد بيانات للأرشفة.")
+        df_f = pd.DataFrame(st.session_state.patients)
+        st.metric("إجمالي الدخل", f"{df_f['الواصل'].sum():,} د.ع")
+        st.write("📈 إحصائيات الحالة الصحية للمرضى:")
+        st.bar_chart(df_f['الحالة'].value_counts())
