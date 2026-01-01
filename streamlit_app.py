@@ -29,18 +29,17 @@ st.markdown("""
         background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
         padding: 25px; border-radius: 20px; color: white;
         margin-bottom: 25px; border-bottom: 4px solid #3b82f6;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     }
     .patient-card {
-        background: white; padding: 20px; border-radius: 15px;
-        border-right: 6px solid #3b82f6; margin-bottom: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        background: white; padding: 15px; border-radius: 12px;
+        border-right: 6px solid #3b82f6; margin-bottom: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     }
     header { visibility: hidden !important; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. الموسوعة الشاملة للتحاليل (أكثر من 80 فحص) ---
+# --- 2. الموسوعة الشاملة للتحاليل ---
 LAB_CATALOG = {
     "Hematology (أمراض الدم)": {
         "CBC": (12, 16), "HGB": (12, 18), "PLT": (150, 450), "WBC": (4, 11), "ESR": (0, 20), "PCV": (37, 52), "Reticulocytes": (0.5, 2.5), "PT": (11, 13.5)
@@ -59,13 +58,10 @@ LAB_CATALOG = {
     },
     "Immunology & Virology (المناعة والفيروسات)": {
         "CRP": (0, 5), "RF": (0, 20), "ASO": (0, 200), "HBsAg": (0, 0), "HCV Ab": (0, 0), "HIV": (0, 0), "Anti-CCP": (0, 20), "ANA": (0, 0)
-    },
-    "Urine & Stool (الأدوات والشوائب)": {
-        "Urine Pus Cells": (0, 5), "Urine RBCs": (0, 3), "Stool Amoeba": (0, 0), "H-Pylori (Stool)": (0, 0)
     }
 }
 
-# --- 3. محرك الإعدادات والبيانات ---
+# --- 3. الدوال والمحرك ---
 def load_settings():
     safe_id = "".join(x for x in (st.session_state.get('user_code', 'default')) if x.isalnum())
     path = f"settings_{safe_id}.json"
@@ -86,6 +82,22 @@ def check_status(test_name, res):
             return "🟢 Normal", "#dcfce7"
     return "⚪ N/A", "#f1f5f9"
 
+def generate_excel_report(patient_name, patient_df, lab_name, doc_name):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        patient_df.to_excel(writer, sheet_name='Report', index=False, startrow=4)
+        workbook = writer.book
+        worksheet = writer.sheets['Report']
+        
+        # تنسيق العنوان
+        header_format = workbook.add_format({'bold': True, 'font_size': 16, 'font_color': '#1e3a8a'})
+        worksheet.write('A1', f"Lab: {lab_name}", header_format)
+        worksheet.write('A2', f"Doctor: {doc_name}", workbook.add_format({'italic': True}))
+        worksheet.write('A3', f"Patient: {patient_name}", workbook.add_format({'bold': True}))
+        worksheet.write('E3', f"Date: {datetime.now().strftime('%Y-%m-%d')}")
+        
+    return output.getvalue()
+
 # --- 4. واجهة التطبيق ---
 if 'user_code' not in st.session_state: st.session_state.user_code = None
 
@@ -103,26 +115,38 @@ else:
     db_file = f"db_{safe_id}.csv"
     df = pd.read_csv(db_file) if os.path.exists(db_file) else pd.DataFrame(columns=["ID", "Date", "Patient", "Category", "Test", "Result", "Status"])
 
-    # الهيدر القابل للتخصيص
-    st.markdown(f"""
-        <div class="main-header">
-            <h1 style="margin:0;">{settings['lab_name']}</h1>
-            <p style="margin:0; opacity:0.8;">بإشراف: د. {settings['doc_name']}</p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f'<div class="main-header"><h1 style="margin:0;">{settings["lab_name"]}</h1><p style="margin:0; opacity:0.8;">بإشراف: د. {settings["doc_name"]}</p></div>', unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📋 السجلات", "🧪 فحص جديد", "📊 الإحصائيات", "⚙️ الإعدادات"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 الأرشيف والتقارير", "🧪 فحص جديد", "📊 الإحصائيات", "⚙️ الإعدادات"])
 
     with tab1:
-        search = st.text_input("🔍 بحث عن مريض...")
-        filtered = df[df['Patient'].str.contains(search, na=False)] if search else df
-        for _, r in filtered.iloc[::-1].head(15).iterrows():
-            st.markdown(f"""
-                <div class="patient-card">
-                    <div style="display:flex; justify-content:space-between;"><b>{r['Patient']}</b><small>{r['Date']}</small></div>
-                    <div style="margin-top:10px;">{r['Test']}: <b>{r['Result']}</b> <span style="float:left; background:{check_status(r['Test'], r['Result'])[1]}; padding:2px 10px; border-radius:10px;">{r['Status']}</span></div>
-                </div>
-            """, unsafe_allow_html=True)
+        search = st.text_input("🔍 بحث عن مريض لإصدار تقريره...")
+        if not df.empty:
+            patients = df['Patient'].unique()
+            selected_p = st.selectbox("اختر المريض لعرض تاريخه وتصديره:", [""] + list(patients))
+            
+            if selected_p != "":
+                p_records = df[df['Patient'] == selected_p]
+                st.write(f"سجلات المريض: {selected_p}")
+                st.dataframe(p_records[["Date", "Test", "Result", "Status"]], use_container_width=True)
+                
+                # أزرار التصدير
+                excel_data = generate_excel_report(selected_p, p_records, settings['lab_name'], settings['doc_name'])
+                st.download_button(
+                    label=f"📥 تحميل تقرير {selected_p} (Excel)",
+                    data=excel_data,
+                    file_name=f"Report_{selected_p}.xlsx",
+                    mime="application/vnd.ms-excel",
+                    use_container_width=True
+                )
+            
+            st.divider()
+            st.subheader("آخر السجلات المضافة")
+            filtered = df[df['Patient'].str.contains(search, na=False)] if search else df
+            for _, r in filtered.iloc[::-1].head(10).iterrows():
+                st.markdown(f'<div class="patient-card"><b>👤 {r["Patient"]}</b><br>{r["Test"]}: {r["Result"]} <span style="float:left; background:{check_status(r["Test"], r["Result"])[1]}; padding:2px 8px; border-radius:8px;">{r["Status"]}</span></div>', unsafe_allow_html=True)
+        else:
+            st.info("لا توجد سجلات حالياً.")
 
     with tab2:
         with st.form("lab_form", clear_on_submit=True):
@@ -130,29 +154,34 @@ else:
             cat_choice = st.selectbox("التصنيف", list(LAB_CATALOG.keys()))
             test_choice = st.selectbox("الفحص", list(LAB_CATALOG[cat_choice].keys()))
             res_val = st.number_input("النتيجة", format="%.2f")
-            if st.form_submit_button("حفظ ✅", use_container_width=True):
+            if st.form_submit_button("حفظ النتيجة ✅", use_container_width=True):
                 if p_name:
                     status, _ = check_status(test_choice, res_val)
                     new_data = pd.DataFrame([[datetime.now().strftime("%H%M"), datetime.now().strftime("%Y-%m-%d"), p_name, cat_choice, test_choice, res_val, status]], columns=df.columns)
                     df = pd.concat([df, new_data], ignore_index=True)
                     df.to_csv(db_file, index=False)
-                    st.toast("تم الحفظ!")
-                else: st.error("أدخل اسم المريض")
+                    st.toast(f"تم حفظ نتيجة {p_name}")
+                else: st.error("أدخل الاسم")
 
     with tab3:
         if not df.empty:
-            st.plotly_chart(px.pie(df, names='Status', title="توزيع الحالات الصحية", hole=0.4), use_container_width=True)
-            st.plotly_chart(px.bar(df, x='Category', title="أكثر الأقسام طلباً"), use_container_width=True)
+            st.plotly_chart(px.pie(df, names='Status', title="تحليل الحالة الصحية العامة", hole=0.4), use_container_width=True)
+            st.plotly_chart(px.bar(df, x='Date', color='Status', title="نشاط المختبر اليومي"), use_container_width=True)
 
     with tab4:
-        st.subheader("🛠️ إعدادات المختبر")
+        st.subheader("🛠️ تخصيص الهوية")
         new_lab = st.text_input("اسم المختبر", value=settings['lab_name'])
-        new_doc = st.text_input("اسم الدكتور المسؤول", value=settings['doc_name'])
+        new_doc = st.text_input("الطبيب المسؤول", value=settings['doc_name'])
         if st.button("حفظ الإعدادات 💾"):
             save_settings({"lab_name": new_lab, "doc_name": new_doc})
-            st.success("تم تحديث البيانات")
+            st.success("تم الحفظ!")
             st.rerun()
         
-        if st.button("خروج 🚪"):
+        st.divider()
+        if st.button("تصدير قاعدة البيانات كاملة (Backup)", use_container_width=True):
+            csv = df.to_csv(index=False).encode('utf-8-sig')
+            st.download_button("تحميل ملف CSV", data=csv, file_name="all_data.csv", mime="text/csv")
+
+        if st.button("خروج 🚪", use_container_width=True):
             st.session_state.clear()
             st.rerun()
