@@ -26,32 +26,50 @@ if 'lab_name' not in st.session_state:
 if 'df' not in st.session_state:
     st.session_state.df = pd.read_csv(DB_FILE) if os.path.exists(DB_FILE) else pd.DataFrame(columns=["التاريخ", "المريض", "الفحص", "النتيجة", "الحالة", "المحلل", "الهاتف", "ملاحظات"])
 
-# --- التعديل الجوهري هنا: إضافة JavaScript لتعطيل إعادة التحميل كلياً ---
+# --- التعديل النهائي والقطعي لإلغاء إعادة تحميل الصفحة ---
 st.markdown("""
     <script>
-    // منع السحب للتحديث في الأندرويد والكروم
-    document.addEventListener('touchstart', function(e) {
-        if (e.touches.length > 1) e.preventDefault();
-    }, {passive: false});
-    
-    // قفل حركة الجسم الخارجي لمنع اهتزاز الصفحة
-    window.onload = function() {
-        document.body.style.overscrollBehavior = 'none';
-    }
+    // 1. تعطيل إيماءة السحب للتحديث برمجياً
+    document.body.style.overscrollBehaviorY = 'none';
+    document.documentElement.style.overscrollBehaviorY = 'none';
+
+    // 2. منع المتصفح من تنفيذ عملية التحديث عند محاولة السحب للأسفل
+    window.addEventListener('load', function() {
+        var lastTouchY = 0;
+        var preventPullToRefresh = false;
+
+        document.addEventListener('touchstart', function(e) {
+            if (e.touches.length !== 1) return;
+            lastTouchY = e.touches[0].clientY;
+            // التحقق مما إذا كان المستخدم في أعلى الصفحة
+            preventPullToRefresh = window.pageYOffset === 0;
+        }, {passive: false});
+
+        document.addEventListener('touchmove', function(e) {
+            var touchY = e.touches[0].clientY;
+            var touchDiff = touchY - lastTouchY;
+            lastTouchY = touchY;
+
+            if (preventPullToRefresh && touchDiff > 0) {
+                // إذا كان يحاول السحب للأسفل وهو في القمة، نمنعه نهائياً
+                e.preventDefault();
+            }
+        }, {passive: false});
+    });
     </script>
 
     <style>
-    /* منع إعادة التحميل عند السحب لأسفل */
-    html, body, [data-testid="stAppViewContainer"] {
-        overscroll-behavior-y: contain !important;
-        overscroll-behavior-x: none !important;
-        overflow-y: auto !important;
+    /* 3. إلغاء خاصية التحديث عبر CSS بشكل قطعي لكافة الحاويات */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+        overscroll-behavior-y: none !important;
+        overscroll-behavior: none !important;
+        -webkit-overflow-scrolling: auto !important; /* تعطيل التمرير المطاطي */
     }
-    
-    /* زيادة سلاسة التمرير */
+
+    /* ضمان سلاسة التمرير الداخلي فقط دون التأثير على الصفحة الأم */
     .main {
-        -webkit-overflow-scrolling: touch;
-        overflow-y: auto;
+        overflow-y: auto !important;
+        overscroll-behavior-y: contain !important;
     }
 
     .stApp {
