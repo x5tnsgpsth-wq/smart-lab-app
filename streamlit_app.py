@@ -1,137 +1,114 @@
 import streamlit as st
 import pandas as pd
 import os
-import random
-import time
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
-# --- 1. إعدادات المنصة ---
-st.set_page_config(page_title="BioLab Pro | Enterprise", page_icon="🧬", layout="wide")
+# --- 1. إعدادات المنصة الاحترافية ---
+st.set_page_config(page_title="BioLab Pro | Multi-User", page_icon="🧬", layout="wide")
 
-# ⚠️ أدخل بياناتك هنا ليعمل إرسال البريد الحقيقي
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
-SENDER_EMAIL = "your-email@gmail.com"        # بريدك الإلكتروني
-SENDER_PASSWORD = "xxxx xxxx xxxx xxxx"      # الرمز المكون من 16 حرفاً الذي حصلت عليه
-
-# دالة إرسال البريد الإلكتروني
-def send_otp_email(receiver_email, otp_code):
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = f"BioLab Pro Security <{SENDER_EMAIL}>"
-        msg['To'] = receiver_email
-        msg['Subject'] = "كود التحقق الخاص بك - BioLab Pro"
-
-        body = f"""
-        <div style="font-family: Arial, sans-serif; text-align: center; border: 1px solid #e2e8f0; padding: 40px; border-radius: 15px;">
-            <h2 style="color: #2563eb;">مرحباً بك في BioLab Pro</h2>
-            <p style="color: #475569;">كود التحقق الخاص بدخولك هو:</p>
-            <div style="background: #f1f5f9; padding: 20px; border-radius: 10px; font-size: 32px; font-weight: bold; letter-spacing: 10px; color: #1e293b;">
-                {otp_code}
-            </div>
-            <p style="color: #94a3b8; font-size: 12px; margin-top: 20px;">هذا الكود صالح لمدة 10 دقائق. يرجى عدم مشاركته مع أحد.</p>
-        </div>
-        """
-        msg.attach(MIMEText(body, 'html'))
-
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SENDER_EMAIL, SENDER_PASSWORD)
-            server.send_message(msg)
-        return True
-    except Exception as e:
-        st.error(f"حدث خطأ أثناء الإرسال: {e}")
-        return False
-
-# CSS للواجهة الاحترافية
+# CSS لتصميم عصري ومنعزل
 st.markdown("""
     <style>
     .stApp { background-color: #f8fafc; }
-    .auth-card { background: white; padding: 3rem; border-radius: 20px; box-shadow: 0 10px 15px rgba(0,0,0,0.05); text-align: center; border-top: 6px solid #2563eb; }
-    .main-header { background: white; padding: 1rem 2rem; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+    .auth-container {
+        max-width: 500px;
+        margin: 100px auto;
+        padding: 40px;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+        text-align: center;
+        border-top: 6px solid #2563eb;
+    }
+    .user-header {
+        background: white; padding: 15px 25px; border-radius: 12px;
+        display: flex; justify-content: space-between; align-items: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. إدارة منطق التنقل ---
-if 'step' not in st.session_state: st.session_state.step = 'gate'
-if 'user_id' not in st.session_state: st.session_state.user_id = None
+# --- 2. إدارة الجلسة ---
+if 'user_code' not in st.session_state:
+    st.session_state.user_code = None
 
-# --- 3. الصفحات ---
-
-def show_gate():
-    _, col, _ = st.columns([1, 1.5, 1])
-    with col:
-        st.markdown('<div class="auth-card"><h1>BioLab <span style="color:#2563eb">Pro</span></h1><p>منصة المختبرات السحابية المؤمّنة</p></div>', unsafe_allow_html=True)
-        st.write("")
-        if st.button("👤 الدخول كزائر (بدون حفظ)", use_container_width=True):
-            st.session_state.user_id, st.session_state.step = "Guest_User", "app"
+# --- 3. واجهة الدخول (تحديد الهوية الشخصية) ---
+def login_screen():
+    st.markdown('<div class="auth-container">', unsafe_allow_html=True)
+    st.image("https://cdn-icons-png.flaticon.com/512/3063/3063176.png", width=80)
+    st.markdown("<h2>مرحباً بك في BioLab</h2><p style='color:64748b'>أدخل رمزك الشخصي للوصول لبياناتك المنعزلة</p>", unsafe_allow_html=True)
+    
+    # الرمز هو الذي يحدد ملف البيانات الخاص بالمستخدم
+    u_code = st.text_input("رمز الدخول (مثلاً: 1234 أو اسمك)", type="password")
+    
+    if st.button("دخول لمساحتي الخاصة", use_container_width=True):
+        if u_code:
+            st.session_state.user_code = u_code
             st.rerun()
-        if st.button("🔐 تسجيل دخول الأعضاء (البريد الإلكتروني)", use_container_width=True):
-            st.session_state.step = "otp_request"
+        else:
+            st.error("يرجى إدخال رمز لفتح ملفك")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# --- 4. واجهة البرنامج (لكل مستخدم ملفه الخاص) ---
+def main_app():
+    # تحديد مسار قاعدة البيانات بناءً على الرمز المدخل
+    # أي شخص يدخل بنفس الرمز سيجد نفس البيانات، والرموز المختلفة تفتح ملفات مختلفة
+    db_file = f"user_data_{st.session_state.user_code}.csv"
+    
+    # تحميل بيانات المستخدم الحالي فقط
+    if 'df' not in st.session_state:
+        if os.path.exists(db_file):
+            st.session_state.df = pd.read_csv(db_file)
+        else:
+            st.session_state.df = pd.DataFrame(columns=["التاريخ", "المريض", "الفحص", "النتيجة", "الحالة"])
+
+    # الهيدر
+    st.markdown(f"""
+        <div class="user-header">
+            <div><h3 style="margin:0; color:#1e293b;">🧬 لوحة تحكم المختبر</h3></div>
+            <div style="background:#dbeafe; color:#1e40af; padding:5px 15px; border-radius:20px; font-weight:bold;">
+                👤 المستخدم: {st.session_state.user_code}
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # القائمة الجانبية
+    with st.sidebar:
+        st.title("⚙️ خيارات")
+        if st.button("تسجيل الخروج 🚪"):
+            # مسح الجلسة للعودة لشاشة الدخول
+            del st.session_state.user_code
+            if 'df' in st.session_state: del st.session_state.df
             st.rerun()
 
-def show_login():
-    _, col, _ = st.columns([1, 1, 1])
-    with col:
-        if st.session_state.step == "otp_request":
-            email = st.text_input("البريد الإلكتروني")
-            if st.button("إرسال رمز OTP"):
-                if email and "@" in email:
-                    otp = str(random.randint(100000, 999999))
-                    with st.spinner("جاري إرسال الرمز..."):
-                        if send_otp_email(email, otp):
-                            st.session_state.otp, st.session_state.temp_email, st.session_state.step = otp, email, "otp_verify"
-                            st.success("أرسلنا الرمز إلى بريدك!")
-                            time.sleep(1)
-                            st.rerun()
-                else: st.warning("يرجى إدخال بريد صحيح")
-        
-        elif st.session_state.step == "otp_verify":
-            st.write(f"الرمز أُرسل إلى: **{st.session_state.temp_email}**")
-            otp_in = st.text_input("أدخل الرمز المكون من 6 أرقام")
-            if st.button("تأكيد الدخول"):
-                if otp_in == st.session_state.otp:
-                    st.session_state.user_id, st.session_state.step = st.session_state.temp_email, "app"
-                    st.rerun()
-                else: st.error("الرمز غير صحيح")
+    # التبويبات
+    t1, t2 = st.tabs(["📂 أرشيفي الخاص", "➕ إضافة فحص جديد"])
 
-def show_main_app():
-    # الهيدر العلوي
-    st.markdown(f'<div class="main-header"><div><h3 style="margin:0;">🧬 لوحة التحكم</h3></div><div style="color:#64748b">مرحباً: <b>{st.session_state.user_id}</b></div></div>', unsafe_allow_html=True)
-    
-    # عزل البيانات
-    safe_db_name = "".join(x for x in st.session_state.user_id if x.isalnum())
-    db_file = f"db_{safe_db_name}.csv"
-    
-    if 'data' not in st.session_state:
-        st.session_state.data = pd.read_csv(db_file) if os.path.exists(db_file) else pd.DataFrame(columns=["التاريخ", "المريض", "الفحص", "النتيجة"])
-
-    t1, t2 = st.tabs(["📊 البيانات", "➕ إضافة"])
-    
     with t1:
-        st.dataframe(st.session_state.data, use_container_width=True)
-    
+        if not st.session_state.df.empty:
+            st.dataframe(st.session_state.df, use_container_width=True)
+        else:
+            st.info("مساحتك الخاصة فارغة حالياً. ابدأ بإضافة بياناتك.")
+
     with t2:
-        with st.form("add"):
+        with st.form("add_form", clear_on_submit=True):
             c1, c2 = st.columns(2)
             name = c1.text_input("اسم المريض")
-            test = c2.selectbox("الفحص", ["Glucose", "HbA1c", "CBC"])
-            res = st.number_input("النتيجة")
-            if st.form_submit_button("حفظ"):
-                new_row = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), name, test, res]], columns=st.session_state.data.columns)
-                st.session_state.data = pd.concat([st.session_state.data, new_row], ignore_index=True)
-                st.session_state.data.to_csv(db_file, index=False)
-                st.success("تم الحفظ بنجاح!")
+            test = c2.selectbox("الفحص", ["CBC", "Glucose", "HbA1c"])
+            res = c1.number_input("النتيجة")
+            stat = c2.selectbox("الحالة", ["طبيعي", "مرتفع", "منخفض"])
+            
+            if st.form_submit_button("حفظ في ملفي الشخصي"):
+                new_data = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), name, test, res, stat]], 
+                                       columns=st.session_state.df.columns)
+                st.session_state.df = pd.concat([st.session_state.df, new_data], ignore_index=True)
+                # الحفظ في الملف الخاص بهذا الرمز فقط
+                st.session_state.df.to_csv(db_file, index=False)
+                st.success("تم الحفظ في مساحتك الخاصة بنجاح!")
                 st.rerun()
 
-    if st.sidebar.button("تسجيل الخروج 🚪"):
-        for key in list(st.session_state.keys()): del st.session_state[key]
-        st.rerun()
-
-# --- التوجيه ---
-if st.session_state.step == 'gate': show_gate()
-elif st.session_state.step in ['otp_request', 'otp_verify']: show_login()
-elif st.session_state.step == 'app': show_main_app()
+# --- 5. منطق التشغيل ---
+if st.session_state.user_code is None:
+    login_screen()
+else:
+    main_app()
