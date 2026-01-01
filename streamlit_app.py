@@ -3,73 +3,90 @@ import pandas as pd
 from datetime import datetime
 import urllib.parse
 
-# 1. إعدادات الصفحة
-st.set_page_config(page_title="مختبر برو - التنبيه الذكي", layout="wide")
-st.markdown("""<style> * { direction: rtl; text-align: right; } .critical { color: red; font-weight: bold; } </style>""", unsafe_allow_html=True)
+# 1. إعداد الصفحة وتنسيق الوصل
+st.set_page_config(page_title="مختبر برو - إصدار التقارير", layout="wide")
+st.markdown("""
+<style>
+    * { direction: rtl; text-align: right; }
+    .receipt-card {
+        border: 2px dashed #000;
+        padding: 20px;
+        background-color: #fff;
+        color: #000;
+        font-family: 'Courier New', Courier, monospace;
+        border-radius: 5px;
+        line-height: 1.6;
+    }
+    .status-normal { color: green; font-weight: bold; }
+    .status-alert { color: red; font-weight: bold; }
+</style>
+""", unsafe_allow_html=True)
 
 # 2. إدارة البيانات
 if 'data_list' not in st.session_state:
     st.session_state.data_list = []
 
-# وظيفة لتحديد مستوى الخطورة
-def check_severity(test, value):
-    thresholds = {
-        "Glucose": {"high": 200, "critical": 350},
-        "HbA1c": {"high": 7, "critical": 10},
-        "Urea": {"high": 50, "critical": 100},
-        "Creatinine": {"high": 1.2, "critical": 2.5}
-    }
-    if test in thresholds:
-        if value >= thresholds[test]["critical"]: return "🚨 خطر جداً"
-        if value >= thresholds[test]["high"]: return "⚠️ مرتفع"
-    return "✅ طبيعي"
-
 # 3. واجهة التطبيق
-st.sidebar.title("🧬 نظام المختبر")
-menu = st.sidebar.radio("القائمة", ["إدخال نتائج", "السجل الشامل", "ملخص الحالات الحرجة"])
+st.sidebar.title("💳 نظام الفواتير والنتائج")
+menu = st.sidebar.radio("القائمة", ["إدخال وحفظ", "عرض الوصل والتقرير", "الإحصائيات المالية"])
 
-if menu == "إدخال نتائج":
-    st.header("📝 تسجيل نتيجة فحص")
-    with st.form("entry_form"):
+if menu == "إدخال وحفظ":
+    st.header("📝 تسجيل بيانات المراجع")
+    with st.form("main_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
             name = st.text_input("اسم المريض")
-            phone = st.text_input("رقم الهاتف")
-            test = st.selectbox("نوع الفحص", ["Glucose", "HbA1c", "Urea", "Creatinine"])
+            test = st.selectbox("الفحص", ["CBC", "Glucose", "Urea", "HbA1c"])
+            price = st.number_input("سعر الفحص", value=10000, step=500)
         with col2:
             res = st.number_input("النتيجة", format="%.2f")
-            price = st.number_input("السعر", value=5000)
-            paid = st.number_input("المدفوع", value=5000)
+            paid = st.number_input("المبلغ الواصل", value=10000, step=500)
+            phone = st.text_input("رقم الهاتف")
             
-        if st.form_submit_button("حفظ النتيجة"):
-            severity = check_severity(test, res)
+        if st.form_submit_button("حفظ البيانات"):
+            status = "🚨 مرتفع" if res > 110 else "✅ طبيعي"
             entry = {
-                "التاريخ": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "المريض": name, "الهاتف": phone, "الفحص": test,
-                "النتيجة": res, "الحالة": severity,
-                "المتبقي": price - paid
+                "التاريخ": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+                "المريض": name, "الفحص": test, "النتيجة": res,
+                "الحالة": status, "السعر": price, "المدفوع": paid,
+                "المتبقي": price - paid, "الهاتف": phone
             }
             st.session_state.data_list.append(entry)
-            if "🚨" in severity:
-                st.error(f"تنبيه: نتيجة المريض {name} حرجة جداً!")
-            else:
-                st.success("تم الحفظ")
+            st.success("تم تسجيل البيانات بنجاح!")
 
-elif menu == "السجل الشامل":
-    st.header("📋 السجل العام")
+elif menu == "عرض الوصل والتقرير":
+    st.header("📄 معاينة الوصل / التقرير")
     if st.session_state.data_list:
         df = pd.DataFrame(st.session_state.data_list)
-        st.table(df) # استخدام Table لضمان ظهور الألوان والرموز بوضوح
+        p_name = st.selectbox("اختر اسم المريض لعرض وصله:", df['المريض'].unique())
+        
+        if p_name:
+            data = df[df['المريض'] == p_name].iloc[-1]
+            st.markdown(f"""
+            <div class="receipt-card">
+                <h2 style="text-align:center;">مختبر التحليلات المرضية</h2>
+                <p style="text-align:center;">{data['التاريخ']}</p>
+                <hr>
+                <p><b>اسم المريض:</b> {data['المريض']}</p>
+                <p><b>نوع الفحص:</b> {data['الفحص']}</p>
+                <p><b>النتيجة:</b> <span style="font-size:20px;">{data['النتيجة']}</span></p>
+                <p><b>الحالة:</b> {data['الحالة']}</p>
+                <hr>
+                <p><b>المبلغ الكلي:</b> {data['السعر']:,} د.ع</p>
+                <p><b>الواصل:</b> {data['المدفوع']:,} د.ع</p>
+                <p><b>المتبقي بذمته:</b> <span style="color:red;">{data['المتبقي']:,} د.ع</span></p>
+                <hr>
+                <p style="text-align:center;">شكراً لثقتكم بنا</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.info("💡 نصيحة: يمكنك التقاط صورة للشاشة (Screenshot) وإرسالها للمريض مباشرة.")
     else:
-        st.info("لا يوجد بيانات")
+        st.info("لا توجد بيانات لعرضها.")
 
-elif menu == "ملخص الحالات الحرجة":
-    st.header("🚨 الحالات التي تحتاج متابعة")
+elif menu == "الإحصائيات المالية":
+    st.header("📊 ملخص الحسابات")
     if st.session_state.data_list:
         df = pd.DataFrame(st.session_state.data_list)
-        critical_df = df[df['الحالة'].str.contains("🚨")]
-        if not critical_df.empty:
-            st.warning(f"يوجد لديك {len(critical_df)} حالة حرجة اليوم!")
-            st.dataframe(critical_df)
-        else:
-            st.success("كل النتائج ضمن النطاق الآمن حتى الآن.")
+        st.metric("إجمالي الديون (المبالغ المتبقية)", f"{df['المتبقي'].sum():,} د.ع")
+        st.dataframe(df[['المريض', 'الفحص', 'المتبقي', 'التاريخ']])
