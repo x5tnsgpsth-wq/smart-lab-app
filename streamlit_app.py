@@ -6,7 +6,7 @@ from datetime import datetime
 import plotly.express as px
 import io
 
-# --- 1. محرك الإعدادات ---
+# --- 1. محرك الإعدادات والنطاقات المرجعية ---
 def get_status(test, result):
     ranges = {
         "Glucose (Fasting)": (70, 100),
@@ -40,17 +40,9 @@ def save_settings(settings):
 # --- 2. الحل الجذري لمنع تحديث الصفحة (Anti-Pull-to-Refresh) ---
 st.set_page_config(page_title="BioLab Ultra", page_icon="🧬", layout="wide")
 
-st.markdown("""
-    <style>
-    /* 1. منع خاصية السحب للتحديث في الأندرويد والآيفون نهائياً */
-    html, body, [data-testid="stAppViewContainer"], .main {
-        # --- 2. الحل النهائي والقطعي لمنع تحديث الصفحة (JS & CSS Force Lock) ---
-st.set_page_config(page_title="BioLab Ultra", page_icon="🧬", layout="wide")
-
-# هذا الكود يقوم بحقن جافا سكريبت تمنع المتصفح من الارتداد للأعلى تماماً
+# حقن جافا سكريبت لتعطيل ميزة السحب للتحديث في الأندرويد
 st.components.v1.html("""
     <script>
-    // تعطيل السحب لأسفل تماماً لمنع حلقة التحميل
     window.addEventListener('touchstart', function(e) {
         if (e.touches.length !== 1) return;
         this.startPos = e.touches[0].pageY;
@@ -59,16 +51,16 @@ st.components.v1.html("""
     window.addEventListener('touchmove', function(e) {
         var touch = e.touches[0];
         if (this.startPos < touch.pageY && window.scrollY <= 1) {
-            // إذا كان المستخدم يسحب لأسفل وهو في أعلى الصفحة، نمنع المتصفح
-            e.preventDefault();
+            e.preventDefault(); // منع المتصفح من إظهار حلقة التحميل
         }
     }, {passive: false});
     </script>
 """, height=0)
 
+# حقن التنسيق الاحترافي وقفل أبعاد الصفحة
 st.markdown("""
     <style>
-    /* قفل المحتوى لمنع المتصفح من استدعاء ميزة Pull-to-refresh */
+    /* قفل المحتوى ومنع المتصفح من استدعاء ميزة التحديث */
     html, body {
         overscroll-behavior-y: none !important;
         overscroll-behavior: none !important;
@@ -82,35 +74,17 @@ st.markdown("""
         -webkit-overflow-scrolling: touch;
     }
 
-    /* تحسين البطاقات */
+    /* تصميم البطاقات الاحترافي */
     .patient-card {
         background: #ffffff; padding: 15px; border-radius: 15px;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 10px;
         border-right: 5px solid #1e3a8a; color: #1e293b;
     }
     
+    /* إخفاء الزوائد الافتراضية لزيادة الثبات */
     header { visibility: hidden !important; } 
     footer { visibility: hidden !important; }
-    </style>
-""", unsafe_allow_html=True)
-
-        position: fixed;
-        width: 100%;
-        height: 100%;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    /* 2. تحسين تصميم البطاقات */
-    .patient-card {
-        background: #ffffff; padding: 15px; border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 10px;
-        border-right: 5px solid #1e3a8a; color: #1e293b;
-    }
-    
-    /* 3. إخفاء أي هوامش تسبب قفز الصفحة */
-    .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
-    header { visibility: hidden; } /* إخفاء هيدر ستريمليت الافتراضي */
+    .block-container { padding-top: 1rem !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -120,9 +94,10 @@ if 'user_code' not in st.session_state: st.session_state.user_code = None
 if st.session_state.user_code is None:
     _, col, _ = st.columns([0.1, 0.8, 0.1])
     with col:
+        st.markdown("<br><br>", unsafe_allow_html=True)
         st.image("https://cdn-icons-png.flaticon.com/512/3063/3063205.png", width=80)
         st.title("BioLab Ultra")
-        u_code = st.text_input("رمز الدخول", type="password", key="login_key")
+        u_code = st.text_input("رمز الدخول الشخصي", type="password", key="login_key")
         if st.button("دخول للنظام", use_container_width=True, type="primary"):
             st.session_state.user_code = u_code
             st.rerun()
@@ -134,69 +109,84 @@ else:
     if 'df' not in st.session_state:
         st.session_state.df = pd.read_csv(db_file) if os.path.exists(db_file) else pd.DataFrame(columns=["ID", "التاريخ", "المريض", "الفحص", "النتيجة", "الحالة", "الهاتف"])
 
-    # الهيدر الاحترافي
+    # الهيدر الاحترافي المتدرج
     st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); padding:20px; border-radius:20px; color:white; margin-bottom:20px;">
             <h2 style="margin:0;">{user_settings.get('lab_name')}</h2>
-            <p style="margin:0; opacity:0.8;">د. {user_settings.get('doctor_name')}</p>
+            <p style="margin:0; opacity:0.8;">المشرف: د. {user_settings.get('doctor_name')}</p>
         </div>
     """, unsafe_allow_html=True)
 
     tab1, tab2, tab3, tab4 = st.tabs(["📋 السجلات", "🧪 إضافة فحص", "📈 إحصائيات", "⚙️ الإعدادات"])
 
     with tab1:
-        search = st.text_input("🔍 ابحث هنا...", placeholder="اسم المريض أو الرقم", key="search_input")
+        search = st.text_input("🔍 بحث عن مريض...", placeholder="الاسم أو الهاتف", key="search_input")
         filtered = st.session_state.df
         if search:
             filtered = filtered[filtered['المريض'].str.contains(search, na=False) | filtered['الهاتف'].str.contains(search, na=False)]
 
-        # عرض البطاقات
-        for index, row in filtered.iloc[::-1].head(15).iterrows():
-            st.markdown(f"""
-                <div class="patient-card">
-                    <div style="display: flex; justify-content: space-between;"><b>👤 {row['المريض']}</b><small>{row['التاريخ']}</small></div>
-                    <div style="margin-top:5px;">{row['الفحص']}: <b>{row['النتيجة']}</b> <span style="float:left;">{row['الحالة']}</span></div>
-                </div>
-            """, unsafe_allow_html=True)
+        # عرض البيانات بنظام البطاقات (Card System)
+        if not filtered.empty:
+            for index, row in filtered.iloc[::-1].head(20).iterrows():
+                st.markdown(f"""
+                    <div class="patient-card">
+                        <div style="display: flex; justify-content: space-between;">
+                            <b>👤 {row['المريض']}</b>
+                            <small style="color:gray;">{row['التاريخ']}</small>
+                        </div>
+                        <div style="margin-top:8px;">
+                            <span>{row['الفحص']}: <b>{row['النتيجة']}</b></span>
+                            <span style="float:left; font-weight:bold;">{row['الحالة']}</span>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
             
-        if not st.session_state.df.empty:
+            # زر تصدير البيانات
             buffer = io.BytesIO()
             st.session_state.df.to_excel(buffer, index=False)
-            st.download_button("📥 تحميل قاعدة البيانات (Excel)", data=buffer.getvalue(), file_name="lab_data.xlsx", use_container_width=True)
+            st.download_button("📥 تحميل كافة السجلات (Excel)", data=buffer.getvalue(), file_name="lab_export.xlsx", use_container_width=True)
+        else:
+            st.info("لا توجد سجلات حالياً.")
 
     with tab2:
-        # استخدام st.container لضمان ثبات العناصر عند الإدخال
         with st.container():
-            st.markdown("### ✍️ إدخال عينة")
+            st.markdown("### 🧪 تسجيل عينة جديدة")
             with st.form("ultra_form_no_refresh", clear_on_submit=True):
-                c1, c2 = st.columns(2)
-                name = c1.text_input("اسم المريض")
-                phone = c2.text_input("رقم الهاتف")
-                test = st.selectbox("نوع الفحص", ["Glucose (Fasting)", "HbA1c", "CBC", "Uric Acid", "TSH", "Creatinine", "Urea"])
-                result = st.number_input("النتيجة", step=0.01)
+                col1, col2 = st.columns(2)
+                p_name = col1.text_input("اسم المريض الثلاثي")
+                p_phone = col2.text_input("رقم الهاتف")
                 
-                if st.form_submit_button("حفظ البيانات ✅", use_container_width=True):
-                    if name:
-                        status = get_status(test, result)
-                        new_data = pd.DataFrame([[datetime.now().strftime("%H%M%S"), datetime.now().strftime("%Y-%m-%d"), name, test, result, status, phone]], columns=st.session_state.df.columns)
-                        st.session_state.df = pd.concat([st.session_state.df, new_data], ignore_index=True)
+                test_options = ["Glucose (Fasting)", "HbA1c", "CBC", "Uric Acid", "TSH", "Creatinine", "Urea", "Lipid Profile", "Vitamin D"]
+                p_test = st.selectbox("نوع التحليل", sorted(test_options))
+                p_result = st.number_input("النتيجة المخبرية", step=0.01)
+                
+                if st.form_submit_button("حفظ السجل في السحابة ✅", use_container_width=True):
+                    if p_name:
+                        status = get_status(p_test, p_result)
+                        new_row = pd.DataFrame([[datetime.now().strftime("%H%M%S"), datetime.now().strftime("%Y-%m-%d"), p_name, p_test, p_result, status, p_phone]], columns=st.session_state.df.columns)
+                        st.session_state.df = pd.concat([st.session_state.df, new_row], ignore_index=True)
                         st.session_state.df.to_csv(db_file, index=False)
-                        st.toast(f"تم الحفظ بنجاح: {status}")
-                    else: st.error("يرجى كتابة الاسم")
+                        st.toast(f"تم الحفظ: {status}", icon="✅")
+                    else: st.error("يرجى إدخال اسم المريض")
 
     with tab3:
         if not st.session_state.df.empty:
-            st.plotly_chart(px.pie(st.session_state.df, names='الحالة', hole=0.4), use_container_width=True)
-            st.plotly_chart(px.histogram(st.session_state.df, x='الفحص'), use_container_width=True)
+            st.plotly_chart(px.pie(st.session_state.df, names='الحالة', title="توزيع الحالات الصحية العامة", hole=0.3), use_container_width=True)
+            st.plotly_chart(px.histogram(st.session_state.df, x='التاريخ', title="نشاط المختبر اليومي"), use_container_width=True)
+        else: st.info("قم بإضافة بيانات أولاً لعرض الإحصائيات.")
 
     with tab4:
-        st.markdown("### ⚙️ الإعدادات")
+        st.markdown("### ⚙️ إدارة النظام")
         n_lab = st.text_input("اسم المختبر", value=user_settings.get('lab_name'))
-        n_doc = st.text_input("الطبيب المشرف", value=user_settings.get('doctor_name'))
-        if st.button("💾 حفظ الإعدادات", use_container_width=True):
-            save_settings({"lab_name": n_lab, "doctor_name": n_doc})
-            st.toast("تم التحديث!")
+        n_doc = st.text_input("الطبيب المسؤول", value=user_settings.get('doctor_name'))
         
-        if st.button("تسجيل الخروج 🚪", use_container_width=True):
+        if st.button("💾 حفظ الإعدادات", use_container_width=True):
+            save_settings({"lab_name": n_lab, "doctor_name": n_doc, "theme": "Dark"})
+            st.toast("تم تحديث إعدادات المختبر بنجاح!")
+        
+        st.divider()
+        if st.button("تسجيل الخروج الآمن 🚪", use_container_width=True):
             st.session_state.clear()
             st.rerun()
+
+    st.markdown("<p style='text-align:center; color:gray; font-size:10px;'>BioLab Ultra v2.5 - Stable Android Build</p>", unsafe_allow_html=True)
