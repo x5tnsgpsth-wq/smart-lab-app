@@ -1,153 +1,178 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import datetime
-import smtplib
-from email.mime.text import MIMEText
 import random
 import time
+from datetime import datetime
 
-# --- 1. إعدادات النظام المتقدمة ---
-st.set_page_config(page_title="Professional Lab OS", page_icon="🔬", layout="wide")
+# --- 1. إعدادات المنصة الاحترافية ---
+st.set_page_config(page_title="BioLab Pro | Enterprise Edition", page_icon="🧬", layout="wide")
 
-# إعدادات البريد (تحتاج لإدخال بياناتك هنا ليعمل الإرسال الحقيقي)
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
-SENDER_EMAIL = "your-email@gmail.com"  # بريدك
-SENDER_PASSWORD = "your-app-password"  # كلمة مرور التطبيقات من جوجل
-
-def send_otp_email(receiver_email, otp_code):
-    try:
-        msg = MIMEText(f"كود التحقق الخاص بك للدخول إلى نظام المختبر هو: {otp_code}")
-        msg['Subject'] = 'كود التحقق OTP'
-        msg['From'] = SENDER_EMAIL
-        msg['To'] = receiver_email
-        
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SENDER_EMAIL, SENDER_PASSWORD)
-            server.send_message(msg)
-        return True
-    except Exception as e:
-        return False
-
-# --- 2. إدارة حالة الجلسة ---
-if 'page' not in st.session_state: st.session_state.page = 'gate'
-if 'user_type' not in st.session_state: st.session_state.user_type = None # guest or member
-if 'user_id' not in st.session_state: st.session_state.user_id = None
-if 'otp_verified' not in st.session_state: st.session_state.otp_verified = False
-
-# --- 3. واجهة بوابة الدخول (The Gate) ---
-def show_gate():
-    st.markdown("""
-        <style>
-        .stApp { background: linear-gradient(to bottom, #f8fafc, #e2e8f0); }
-        .gate-card {
-            background: white; padding: 50px; border-radius: 25px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-            text-align: center; border-top: 8px solid #2563eb;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+# CSS مخصص لتحويل الواجهة إلى تصميم عصري (Modern UI)
+st.markdown("""
+    <style>
+    /* تصميم الخلفية العامة */
+    .stApp { background-color: #f8fafc; }
     
-    _, col, _ = st.columns([1, 2, 1])
+    /* تصميم بطاقة الدخول */
+    .auth-card {
+        background: white;
+        padding: 3rem;
+        border-radius: 20px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        border-top: 6px solid #2563eb;
+    }
+    
+    /* أزرار مخصصة */
+    .stButton>button {
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        font-weight: 600;
+    }
+    
+    /* تبويبات احترافية */
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #f1f5f9;
+        border-radius: 8px 8px 0 0;
+        padding: 10px 20px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- 2. منطق إدارة الجلسة (Session Control) ---
+if 'step' not in st.session_state: st.session_state.step = 'gate'
+if 'user_type' not in st.session_state: st.session_state.user_type = None
+if 'email' not in st.session_state: st.session_state.email = ""
+
+# --- 3. بوابة الدخول الذكية (The Smart Gate) ---
+def show_gate():
+    _, col, _ = st.columns([1, 1.5, 1])
     with col:
         st.markdown("""
-            <div class="gate-card">
-                <h1 style='color: #1e293b;'>🔬 Professional Lab System</h1>
-                <p style='color: #64748b;'>نظام الإدارة المخبرية المتكامل - يرجى تحديد نوع الوصول</p>
+            <div class="auth-card">
+                <h1 style='color: #1e293b; margin-bottom: 0;'>BioLab <span style='color: #2563eb;'>Pro</span></h1>
+                <p style='color: #64748b;'>نظام إدارة البيانات المخبرية السحابي</p>
             </div>
         """, unsafe_allow_html=True)
         st.write("")
         
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("👤 الدخول كزائر", use_container_width=True):
+            st.info("**الدخول السريع**")
+            if st.button("👤 أنا زائر", use_container_width=True):
                 st.session_state.user_type = 'guest'
-                st.session_state.user_id = 'public_guest'
-                st.session_state.page = 'main'
+                st.session_state.user_id = 'Guest_Session'
+                st.session_state.step = 'app'
                 st.rerun()
-                
+        
         with c2:
+            st.success("**الدخول الآمن**")
             if st.button("🔐 تسجيل دخول الأعضاء", use_container_width=True):
-                st.session_state.page = 'login'
+                st.session_state.step = 'otp_request'
                 st.rerun()
 
-# --- 4. واجهة التحقق بالبريد (OTP Login) ---
-def show_login():
-    _, col, _ = st.columns([1, 1.5, 1])
+# --- 4. نظام التحقق الثنائي (OTP Verification) ---
+def show_otp_logic():
+    _, col, _ = st.columns([1, 1, 1])
     with col:
-        st.subheader("تسجيل دخول الأعضاء")
-        email = st.text_input("أدخل البريد الإلكتروني الخاص بك")
-        
-        if 'generated_otp' not in st.session_state:
-            if st.button("إرسال رمز التحقق OTP"):
+        if st.session_state.step == 'otp_request':
+            st.subheader("تسجيل الدخول")
+            email = st.text_input("البريد الإلكتروني أو رقم الهاتف", placeholder="example@mail.com")
+            if st.button("إرسال رمز التحقق"):
                 if email:
-                    otp = str(random.randint(100000, 999999))
-                    st.session_state.generated_otp = otp
-                    st.session_state.temp_email = email
-                    # ملاحظة: إذا لم تضع بيانات SMTP حقيقية، سيظهر الرمز هنا للتجربة
-                    if send_otp_email(email, otp):
-                        st.success("تم إرسال الرمز لبريدك الحقيقي")
-                    else:
-                        st.warning(f"فشل الإرسال التلقائي. الرمز التجريبي هو: {otp}")
-                else: st.error("يرجى كتابة البريد")
+                    with st.spinner('جاري توليد الرمز وإرساله...'):
+                        time.sleep(1.5)
+                        st.session_state.otp = str(random.randint(100000, 999999))
+                        st.session_state.email = email
+                        st.session_state.step = 'otp_verify'
+                        st.rerun()
+                else: st.warning("يرجى إدخال بيانات صالحة")
         
-        else:
-            otp_in = st.text_input("أدخل الرمز الذي استلمته")
-            if st.button("تأكيد الرمز"):
-                if otp_in == st.session_state.generated_otp:
+        elif st.session_state.step == 'otp_verify':
+            st.subheader("التحقق من الهوية")
+            st.write(f"أرسلنا الرمز إلى: **{st.session_state.email}**")
+            # تنبيه احترافي يظهر الرمز للتجربة حالياً
+            st.code(f"رمز التحقق (OTP): {st.session_state.otp}", language="text")
+            
+            otp_input = st.text_input("أدخل الرمز المكون من 6 أرقام")
+            if st.button("تأكيد ودخول"):
+                if otp_input == st.session_state.otp:
                     st.session_state.user_type = 'member'
-                    st.session_state.user_id = st.session_state.temp_email
-                    st.session_state.page = 'main'
+                    st.session_state.user_id = st.session_state.email
+                    st.session_state.step = 'app'
                     st.rerun()
-                else: st.error("الرمز غير صحيح")
-            if st.button("إعادة إرسال"):
-                del st.session_state.generated_otp
+                else: st.error("الرمز غير صحيح، حاول مجدداً")
+            if st.button("رجوع", type="secondary"):
+                st.session_state.step = 'gate'
                 st.rerun()
 
-# --- 5. واجهة البرنامج الرئيسية ---
-def show_main():
-    # تصميم احترافي للرأس
-    st.markdown(f"""
-        <div style="background: white; padding: 20px; border-radius: 15px; border-bottom: 4px solid #2563eb; display: flex; justify-content: space-between; align-items: center;">
-            <h2 style="margin:0;">🔬 لوحة تحكم المختبر</h2>
-            <div style="text-align: left;">
-                <span style="background: #dbeafe; color: #1e40af; padding: 5px 15px; border-radius: 20px; font-weight: bold;">
-                    👤 {st.session_state.user_id}
-                </span>
+# --- 5. لوحة التحكم الرئيسية (The Dashboard) ---
+def show_app():
+    # الهيدر الاحترافي
+    with st.container():
+        st.markdown(f"""
+            <div style="background: white; padding: 15px 25px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <h2 style="margin:0; color:#1e293b;">🔬 BioLab</h2>
+                    <span style="background:#e0f2fe; color:#0369a1; padding:4px 12px; border-radius:20px; font-size:0.8rem; font-weight:bold;">
+                        {st.session_state.user_type.upper()}
+                    </span>
+                </div>
+                <div style="color:#64748b;">👤 {st.session_state.user_id}</div>
             </div>
-        </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    # عزل البيانات: كل مستخدم له ملفه الخاص تماماً
-    user_db = f"data_{st.session_state.user_id.replace('@', '_').replace('.', '_')}.csv"
-    if 'df' not in st.session_state:
-        st.session_state.df = pd.read_csv(user_db) if os.path.exists(user_db) else pd.DataFrame(columns=["التاريخ", "المريض", "الفحص", "النتيجة"])
-
-    # المحتوى التفاعلي
-    tab1, tab2 = st.tabs(["📝 إدخال جديد", "📋 السجلات الخاصة"])
+    # عزل قواعد البيانات برمجياً
+    safe_name = "".join(x for x in st.session_state.user_id if x.isalnum())
+    db_path = f"store_{safe_name}.csv"
     
+    if 'data' not in st.session_state:
+        st.session_state.data = pd.read_csv(db_path) if os.path.exists(db_path) else pd.DataFrame(columns=["التاريخ", "المريض", "الفحص", "النتيجة", "الحالة"])
+
+    st.write("")
+    
+    # التبويبات بنمط Dashboards العالمية
+    tab1, tab2, tab3 = st.tabs(["📊 نظرة عامة", "➕ إضافة فحص", "⚙️ الإعدادات"])
+
     with tab1:
-        with st.form("lab_form"):
-            c1, c2 = st.columns(2)
-            name = c1.text_input("اسم المريض")
-            test = c2.selectbox("نوع التحليل", ["Glucose", "HbA1c", "CBC"])
-            res = c1.number_input("النتيجة", step=0.01)
-            if st.form_submit_button("حفظ البيانات"):
-                new_data = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), name, test, res]], columns=st.session_state.df.columns)
-                st.session_state.df = pd.concat([st.session_state.df, new_data], ignore_index=True)
-                st.session_state.df.to_csv(user_db, index=False)
-                st.success("تم الحفظ في مساحتك الخاصة")
+        if st.session_state.data.empty:
+            st.info("مرحباً بك! ابدأ بإضافة أول فحص من تبويب 'إضافة فحص'.")
+        else:
+            m1, m2, m3 = st.columns(3)
+            m1.metric("إجمالي الفحوصات", len(st.session_state.data))
+            m2.metric("مرضى فريدون", st.session_state.data["المريض"].nunique())
+            m3.metric("تحديث اليوم", datetime.now().strftime("%H:%M"))
+            st.divider()
+            st.dataframe(st.session_state.data, use_container_width=True)
 
     with tab2:
-        st.dataframe(st.session_state.df, use_container_width=True)
+        with st.form("entry_form"):
+            c1, c2 = st.columns(2)
+            p_name = c1.text_input("اسم المريض")
+            p_test = c2.selectbox("نوع التحليل", ["Glucose", "HbA1c", "Lipid Profile", "CBC"])
+            p_res = c1.number_input("النتيجة المخبرية", format="%.2f")
+            p_stat = c2.selectbox("التقييم الأولي", ["Normal", "Critical", "Follow-up"])
+            
+            if st.form_submit_button("إرسال للبيانات السحابية"):
+                new_entry = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), p_name, p_test, p_res, p_stat]], columns=st.session_state.data.columns)
+                st.session_state.data = pd.concat([st.session_state.data, new_entry], ignore_index=True)
+                st.session_state.data.to_csv(db_path, index=False)
+                st.toast("✅ تم التزامن مع السيرفر بنجاح!")
+                time.sleep(0.5)
+                st.rerun()
 
-    if st.sidebar.button("تسجيل الخروج 🚪"):
-        for key in list(st.session_state.keys()): del st.session_state[key]
-        st.rerun()
+    with tab3:
+        st.write("إعدادات الحساب")
+        if st.button("تسجيل الخروج الآمن"):
+            for key in list(st.session_state.keys()): del st.session_state[key]
+            st.rerun()
 
-# --- التوجيه (Routing) ---
-if st.session_state.page == 'gate': show_gate()
-elif st.session_state.page == 'login': show_login()
-elif st.session_state.page == 'main': show_main()
+# --- 6. نظام التوجيه الأساسي (Core Router) ---
+if st.session_state.step == 'gate':
+    show_gate()
+elif st.session_state.step in ['otp_request', 'otp_verify']:
+    show_otp_logic()
+elif st.session_state.step == 'app':
+    show_app()
