@@ -6,8 +6,8 @@ from datetime import datetime
 import plotly.express as px
 import io
 
-# --- 1. القفل النووي المزدوج (Anti-Pull-to-Refresh) ---
-st.set_page_config(page_title="BioLab Ultra Pro", page_icon="🧬", layout="wide")
+# --- 1. حماية الواجهة (منع حلقة التحديث) ---
+st.set_page_config(page_title="BioLab Pro Max", page_icon="🧬", layout="wide")
 
 st.markdown("""
     <style>
@@ -26,162 +26,104 @@ st.markdown("""
         overscroll-behavior-y: contain !important;
     }
     .main-header {
-        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
-        padding: 25px; border-radius: 20px; color: white;
-        margin-bottom: 25px; border-bottom: 4px solid #3b82f6;
+        background: linear-gradient(135deg, #064e3b 0%, #059669 100%);
+        padding: 25px; border-radius: 20px; color: white; margin-bottom: 20px;
     }
-    .patient-card {
-        background: white; padding: 15px; border-radius: 12px;
-        border-right: 6px solid #3b82f6; margin-bottom: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    .metric-card {
+        background: #f0fdf4; border: 1px solid #bbf7d0;
+        padding: 15px; border-radius: 10px; text-align: center;
     }
-    header { visibility: hidden !important; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. الموسوعة الشاملة للتحاليل ---
+# --- 2. قاعدة البيانات الموسعة مع الأسعار والقيم الطبيعية ---
 LAB_CATALOG = {
-    "Hematology (أمراض الدم)": {
-        "CBC": (12, 16), "HGB": (12, 18), "PLT": (150, 450), "WBC": (4, 11), "ESR": (0, 20), "PCV": (37, 52), "Reticulocytes": (0.5, 2.5), "PT": (11, 13.5)
+    "Hematology": {
+        "CBC": {"range": (12, 16), "unit": "g/dL", "price": 10},
+        "PLT": {"range": (150, 450), "unit": "10^3/uL", "price": 8}
     },
-    "Biochemistry (الكيمياء الحيوية)": {
-        "Glucose (Fasting)": (70, 100), "HbA1c": (4, 5.6), "Urea": (15, 45), "Creatinine": (0.6, 1.2), "Uric Acid": (3.5, 7.2), "ALT": (7, 56), "AST": (10, 40), "ALP": (44, 147), "Total Bilirubin": (0.1, 1.2), "Direct Bilirubin": (0, 0.3), "Albumin": (3.4, 5.4), "Amylase": (30, 110)
+    "Biochemistry": {
+        "Glucose": {"range": (70, 100), "unit": "mg/dL", "price": 5},
+        "HbA1c": {"range": (4, 5.6), "unit": "%", "price": 15},
+        "Creatinine": {"range": (0.6, 1.2), "unit": "mg/dL", "price": 7}
     },
-    "Lipids (الدهون)": {
-        "Total Cholesterol": (125, 200), "Triglycerides": (50, 150), "HDL": (40, 60), "LDL": (0, 100), "VLDL": (2, 30)
-    },
-    "Hormones & Tumors (الهرمونات والأورام)": {
-        "TSH": (0.4, 4.0), "Free T4": (0.8, 1.8), "Free T3": (2.3, 4.2), "Prolactin": (4, 23), "PSA (Total)": (0, 4), "CEA": (0, 3), "CA 125": (0, 35), "AFP": (0, 8), "Cortisol (AM)": (5, 23), "Testosterone": (300, 1000)
-    },
-    "Vitamins & Minerals (الفيتامينات والمعادن)": {
-        "Vitamin D3": (30, 100), "Vitamin B12": (200, 900), "Serum Iron": (60, 170), "Ferritin": (20, 250), "Calcium": (8.5, 10.5), "Potassium": (3.5, 5.1), "Sodium": (135, 145), "Magnesium": (1.7, 2.2), "Zinc": (60, 120)
-    },
-    "Immunology & Virology (المناعة والفيروسات)": {
-        "CRP": (0, 5), "RF": (0, 20), "ASO": (0, 200), "HBsAg": (0, 0), "HCV Ab": (0, 0), "HIV": (0, 0), "Anti-CCP": (0, 20), "ANA": (0, 0)
+    "Hormones": {
+        "TSH": {"range": (0.4, 4.0), "unit": "mIU/L", "price": 20},
+        "Vitamin D3": {"range": (30, 100), "unit": "ng/mL", "price": 35}
     }
 }
 
-# --- 3. الدوال والمحرك ---
+# --- 3. المحرك البرمجي ---
 def load_settings():
     safe_id = "".join(x for x in (st.session_state.get('user_code', 'default')) if x.isalnum())
-    path = f"settings_{safe_id}.json"
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f: return json.load(f)
-    return {"lab_name": "SmartLab Pro", "doc_name": "Admin"}
+    p = f"set_{safe_id}.json"
+    return json.load(open(p, "r", encoding="utf-8")) if os.path.exists(p) else {"lab_name": "مختبر الثقة", "doc_name": "مدير المختبر"}
 
-def save_settings(s):
-    safe_id = "".join(x for x in (st.session_state.get('user_code', 'default')) if x.isalnum())
-    with open(f"settings_{safe_id}.json", "w", encoding="utf-8") as f: json.dump(s, f, ensure_ascii=False)
-
-def check_status(test_name, res):
+def check_result(test, val):
     for cat in LAB_CATALOG.values():
-        if test_name in cat:
-            low, high = cat[test_name]
-            if res < low: return "🔴 Low", "#fee2e2"
-            if res > high: return "🟡 High", "#fef9c3"
-            return "🟢 Normal", "#dcfce7"
-    return "⚪ N/A", "#f1f5f9"
+        if test in cat:
+            low, high = cat[test]["range"]
+            if val < low: return "منخفض 🔵", "#dbeafe"
+            if val > high: return "مرتفع 🔴", "#fee2e2"
+            return "طبيعي 🟢", "#dcfce7"
+    return "غير محدد", "#f3f4f6"
 
-def generate_excel_report(patient_name, patient_df, lab_name, doc_name):
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        patient_df.to_excel(writer, sheet_name='Report', index=False, startrow=4)
-        workbook = writer.book
-        worksheet = writer.sheets['Report']
-        
-        # تنسيق العنوان
-        header_format = workbook.add_format({'bold': True, 'font_size': 16, 'font_color': '#1e3a8a'})
-        worksheet.write('A1', f"Lab: {lab_name}", header_format)
-        worksheet.write('A2', f"Doctor: {doc_name}", workbook.add_format({'italic': True}))
-        worksheet.write('A3', f"Patient: {patient_name}", workbook.add_format({'bold': True}))
-        worksheet.write('E3', f"Date: {datetime.now().strftime('%Y-%m-%d')}")
-        
-    return output.getvalue()
-
-# --- 4. واجهة التطبيق ---
+# --- 4. واجهة المستخدم ---
 if 'user_code' not in st.session_state: st.session_state.user_code = None
 
 if st.session_state.user_code is None:
-    _, col, _ = st.columns([0.1, 0.8, 0.1])
-    with col:
-        st.markdown("<br><br><center><h1>🧬 BioLab Ultra</h1></center>", unsafe_allow_html=True)
-        u_code = st.text_input("رمز الدخول", type="password")
-        if st.button("دخول", use_container_width=True, type="primary"):
-            st.session_state.user_code = u_code
-            st.rerun()
+    st.title("🧬 نظام BioLab الذكي")
+    code = st.text_input("رمز الدخول السري", type="password")
+    if st.button("دخول"):
+        st.session_state.user_code = code
+        st.rerun()
 else:
     settings = load_settings()
     safe_id = "".join(x for x in st.session_state.user_code if x.isalnum())
-    db_file = f"db_{safe_id}.csv"
-    df = pd.read_csv(db_file) if os.path.exists(db_file) else pd.DataFrame(columns=["ID", "Date", "Patient", "Category", "Test", "Result", "Status"])
+    db_file = f"data_{safe_id}.csv"
+    df = pd.read_csv(db_file) if os.path.exists(db_file) else pd.DataFrame(columns=["ID", "Date", "Patient", "Test", "Result", "Status", "Price"])
 
-    st.markdown(f'<div class="main-header"><h1 style="margin:0;">{settings["lab_name"]}</h1><p style="margin:0; opacity:0.8;">بإشراف: د. {settings["doc_name"]}</p></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="main-header"><h1>{settings["lab_name"]}</h1><p>د. {settings["doc_name"]}</p></div>', unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📋 الأرشيف والتقارير", "🧪 فحص جديد", "📊 الإحصائيات", "⚙️ الإعدادات"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 الإدارة والمالية", "🧪 فحص جديد", "🔍 بحث وتقارير", "⚙️ الإعدادات"])
 
     with tab1:
-        search = st.text_input("🔍 بحث عن مريض لإصدار تقريره...")
-        if not df.empty:
-            patients = df['Patient'].unique()
-            selected_p = st.selectbox("اختر المريض لعرض تاريخه وتصديره:", [""] + list(patients))
-            
-            if selected_p != "":
-                p_records = df[df['Patient'] == selected_p]
-                st.write(f"سجلات المريض: {selected_p}")
-                st.dataframe(p_records[["Date", "Test", "Result", "Status"]], use_container_width=True)
-                
-                # أزرار التصدير
-                excel_data = generate_excel_report(selected_p, p_records, settings['lab_name'], settings['doc_name'])
-                st.download_button(
-                    label=f"📥 تحميل تقرير {selected_p} (Excel)",
-                    data=excel_data,
-                    file_name=f"Report_{selected_p}.xlsx",
-                    mime="application/vnd.ms-excel",
-                    use_container_width=True
-                )
-            
-            st.divider()
-            st.subheader("آخر السجلات المضافة")
-            filtered = df[df['Patient'].str.contains(search, na=False)] if search else df
-            for _, r in filtered.iloc[::-1].head(10).iterrows():
-                st.markdown(f'<div class="patient-card"><b>👤 {r["Patient"]}</b><br>{r["Test"]}: {r["Result"]} <span style="float:left; background:{check_status(r["Test"], r["Result"])[1]}; padding:2px 8px; border-radius:8px;">{r["Status"]}</span></div>', unsafe_allow_html=True)
-        else:
-            st.info("لا توجد سجلات حالياً.")
-
-    with tab2:
-        with st.form("lab_form", clear_on_submit=True):
-            p_name = st.text_input("اسم المريض")
-            cat_choice = st.selectbox("التصنيف", list(LAB_CATALOG.keys()))
-            test_choice = st.selectbox("الفحص", list(LAB_CATALOG[cat_choice].keys()))
-            res_val = st.number_input("النتيجة", format="%.2f")
-            if st.form_submit_button("حفظ النتيجة ✅", use_container_width=True):
-                if p_name:
-                    status, _ = check_status(test_choice, res_val)
-                    new_data = pd.DataFrame([[datetime.now().strftime("%H%M"), datetime.now().strftime("%Y-%m-%d"), p_name, cat_choice, test_choice, res_val, status]], columns=df.columns)
-                    df = pd.concat([df, new_data], ignore_index=True)
-                    df.to_csv(db_file, index=False)
-                    st.toast(f"تم حفظ نتيجة {p_name}")
-                else: st.error("أدخل الاسم")
-
-    with tab3:
-        if not df.empty:
-            st.plotly_chart(px.pie(df, names='Status', title="تحليل الحالة الصحية العامة", hole=0.4), use_container_width=True)
-            st.plotly_chart(px.bar(df, x='Date', color='Status', title="نشاط المختبر اليومي"), use_container_width=True)
-
-    with tab4:
-        st.subheader("🛠️ تخصيص الهوية")
-        new_lab = st.text_input("اسم المختبر", value=settings['lab_name'])
-        new_doc = st.text_input("الطبيب المسؤول", value=settings['doc_name'])
-        if st.button("حفظ الإعدادات 💾"):
-            save_settings({"lab_name": new_lab, "doc_name": new_doc})
-            st.success("تم الحفظ!")
-            st.rerun()
+        c1, c2, c3 = st.columns(3)
+        c1.markdown(f'<div class="metric-card"><h3>المرضى اليوم</h3><h2>{len(df[df["Date"] == datetime.now().strftime("%Y-%m-%d")])}</h2></div>', unsafe_allow_html=True)
+        c2.markdown(f'<div class="metric-card"><h3>إجمالي الإيرادات</h3><h2>${df["Price"].sum()}</h2></div>', unsafe_allow_html=True)
+        c3.markdown(f'<div class="metric-card"><h3>فحوصات غير طبيعية</h3><h2>{len(df[df["Status"].str.contains("🔴|🔵")])}</h2></div>', unsafe_allow_html=True)
         
         st.divider()
-        if st.button("تصدير قاعدة البيانات كاملة (Backup)", use_container_width=True):
-            csv = df.to_csv(index=False).encode('utf-8-sig')
-            st.download_button("تحميل ملف CSV", data=csv, file_name="all_data.csv", mime="text/csv")
+        st.plotly_chart(px.line(df, x="Date", y="Price", title="نمو الإيرادات اليومي"), use_container_width=True)
 
-        if st.button("خروج 🚪", use_container_width=True):
-            st.session_state.clear()
+    with tab2:
+        with st.form("add_test"):
+            p_name = st.text_input("اسم المريض")
+            cat = st.selectbox("قسم التحليل", list(LAB_CATALOG.keys()))
+            test = st.selectbox("نوع التحليل", list(LAB_CATALOG[cat].keys()))
+            res = st.number_input("النتيجة", format="%.2f")
+            if st.form_submit_button("حفظ وإصدار الفاتورة"):
+                status, _ = check_result(test, res)
+                price = LAB_CATALOG[cat][test]["price"]
+                new_row = pd.DataFrame([[datetime.now().strftime("%S%M"), datetime.now().strftime("%Y-%m-%d"), p_name, test, res, status, price]], columns=df.columns)
+                df = pd.concat([df, new_row], ignore_index=True)
+                df.to_csv(db_file, index=False)
+                st.success(f"تم الحفظ. السعر: ${price}")
+
+    with tab3:
+        search_id = st.text_input("أدخل اسم المريض للبحث")
+        if search_id:
+            results = df[df["Patient"].str.contains(search_id)]
+            st.dataframe(results)
+            # زر تصدير Excel للمريض المحدد
+            csv = results.to_csv(index=False).encode('utf-8-sig')
+            st.download_button("تحميل التقرير الطبي", csv, f"{search_id}.csv", "text/csv")
+
+    with tab4:
+        st.subheader("إعدادات المختبر")
+        lab = st.text_input("اسم المختبر", settings["lab_name"])
+        doc = st.text_input("اسم الطبيب", settings["doc_name"])
+        if st.button("حفظ الإعدادات"):
+            with open(f"set_{safe_id}.json", "w", encoding="utf-8") as f:
+                json.dump({"lab_name": lab, "doc_name": doc}, f)
             st.rerun()
