@@ -2,3 +2,6 @@ streamlit
 pandas
 plotly
 JavaScript
+pandas
+plotly
+xlsxwriter
