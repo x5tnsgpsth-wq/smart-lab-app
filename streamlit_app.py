@@ -2,65 +2,70 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# 1. إعدادات أساسية
-st.set_page_config(page_title="المختبر المتكامل", layout="wide")
-st.markdown("<style> * { direction: rtl; text-align: right; } </style>", unsafe_allow_html=True)
+# 1. إعداد الصفحة والستايل
+st.set_page_config(page_title="المختبر المتكامل Pro", layout="wide")
+st.markdown("<style> * { direction: rtl; text-align: right; } .stTabs [data-baseweb='tab-list'] { gap: 20px; } </style>", unsafe_allow_html=True)
 
-# 2. البيانات (تخزين ذكي)
-if 'data' not in st.session_state: st.session_state.data = []
-if 'inv' not in st.session_state: st.session_state.inv = {"Glucose": 50, "CBC": 30, "Urea": 20}
+# 2. البيانات الأساسية (تخزين مستقر)
+if 'patients' not in st.session_state: st.session_state.patients = []
+if 'inv' not in st.session_state: st.session_state.inv = {"Glucose": 100, "CBC": 100, "HbA1c": 50}
+if 'staff' not in st.session_state: st.session_state.staff = ["د. محمد", "علي", "سارة"]
 
-# 3. القائمة الجانبية
-st.sidebar.title("🏥 نظام الإدارة")
-user = st.sidebar.selectbox("المحلل:", ["د. محمد", "علي", "سارة"])
-page = st.sidebar.radio("الانتقال إلى:", ["📥 تسجيل وحسابات", "📋 السجل والديون", "📦 المخزن والأرباح"])
+# 3. العنوان الجانبي لاختيار الموظف (ثابت)
+st.sidebar.title("👤 الدخول")
+current_user = st.sidebar.selectbox("الموظف الحالي:", st.session_state.staff)
 
-# --- الصفحة 1: الإدخال والحسابات ---
-if page == "📥 تسجيل وحسابات":
-    st.subheader(f"تسجيل فحص - الموظف: {user}")
-    with st.form("f1", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-        name = c1.text_input("اسم المريض")
-        test = c1.selectbox("الفحص", list(st.session_state.inv.keys()))
-        price = c2.number_input("السعر", value=10000)
-        paid = c2.number_input("الواصل", value=10000)
-        res = st.number_input("النتيجة")
+# 4. التبويبات الرئيسية (لضمان عدم اختفاء الميزات)
+tab1, tab2, tab3, tab4 = st.tabs(["➕ تسجيل فحص", "📋 السجل والديون", "📦 المخزن", "📊 الأرباح والموظفين"])
+
+# --- التبويب 1: تسجيل فحص (مع الموظف والديون) ---
+with tab1:
+    st.subheader(f"إدخال بيانات - المحلل: {current_user}")
+    with st.form("entry_form", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        p_name = col1.text_input("اسم المريض")
+        p_test = col1.selectbox("نوع الفحص", list(st.session_state.inv.keys()))
+        p_res = col1.number_input("النتيجة", format="%.2f")
+        p_price = col2.number_input("السعر الكلي", value=10000)
+        p_paid = col2.number_input("المبلغ المدفوع", value=10000)
         
-        if st.form_submit_button("حفظ"):
-            if st.session_state.inv[test] > 0:
-                st.session_state.inv[test] -= 1 # خصم من المخزن
-                st.session_state.data.append({
-                    "التاريخ": datetime.now().strftime("%m-%d %H:%M"),
-                    "المريض": name, "الفحص": test, "النتيجة": res,
-                    "الواصل": paid, "الدين": price - paid, "المحلل": user
+        if st.form_submit_button("حفظ وتوثيق"):
+            if st.session_state.inv[p_test] > 0:
+                st.session_state.inv[p_test] -= 1 # خصم من المخزن
+                st.session_state.patients.append({
+                    "التاريخ": datetime.now().strftime("%Y-%m-%d"),
+                    "المريض": p_name, "الفحص": p_test, "النتيجة": p_res,
+                    "الواصل": p_paid, "الدين": p_price - p_paid, "الموظف": current_user
                 })
-                st.success("تم الحفظ وتحديث المخزن والديون ✅")
-            else: st.error("المادة نافدة!")
+                st.success(f"تم الحفظ بواسطة {current_user} ✅")
+            else: st.error("المادة نفدت من المخزن!")
 
-# --- الصفحة 2: السجل والديون ---
-elif page == "📋 السجل والديون":
-    st.subheader("📋 سجل المرضى والديون")
-    if st.session_state.data:
-        df = pd.DataFrame(st.session_state.data)
+# --- التبويب 2: السجل والديون ---
+with tab2:
+    st.subheader("📋 مراجعة الحسابات والديون")
+    if st.session_state.patients:
+        df = pd.DataFrame(st.session_state.patients)
         st.dataframe(df, use_container_width=True)
-        st.metric("إجمالي الديون بذمة المرضى", f"{df['الدين'].sum():,} د.ع")
-    else: st.info("لا توجد سجلات")
+        st.error(f"إجمالي الديون بذمة المرضى: {df['الدين'].sum():,} د.ع")
+    else: st.info("السجل فارغ.")
 
-# --- الصفحة 3: المخزن والأرباح ---
-elif page == "📦 المخزن والأرباح":
-    st.subheader("📊 الإدارة المالية والمخزن")
-    col_inv, col_fin = st.columns(2)
-    
-    with col_inv:
-        st.write("📦 حالة المخزن:")
-        st.table(pd.DataFrame(st.session_state.inv.items(), columns=["المادة", "الكمية"]))
-        if st.button("تزويد المخزن (إضافة 10)"):
-            for k in st.session_state.inv: st.session_state.inv[k] += 10
-            st.rerun()
+# --- التبويب 3: المخزن ---
+with tab3:
+    st.subheader("📦 إدارة المخزون")
+    st.table(pd.DataFrame(st.session_state.inv.items(), columns=["المادة", "الكمية المتبقية"]))
+    if st.button("➕ تزويد المخزن (إضافة 50 لكل المواد)"):
+        for k in st.session_state.inv: st.session_state.inv[k] += 50
+        st.rerun()
 
-    with col_fin:
-        if st.session_state.data:
-            df_f = pd.DataFrame(st.session_state.data)
-            st.write("💰 الملخص المالي:")
-            st.metric("الإيراد النقدي", f"{df_f['الواصل'].sum():,} د.ع")
-            st.bar_chart(df_f['المحلل'].value_counts())
+# --- التبويب 4: الأرباح والموظفين (الإحصائيات) ---
+with tab4:
+    st.subheader("📊 أداء الموظفين والأرباح")
+    if st.session_state.patients:
+        df_f = pd.DataFrame(st.session_state.patients)
+        c1, c2 = st.columns(2)
+        c1.metric("إجمالي النقد المستلم", f"{df_f['الواصل'].sum():,} د.ع")
+        c2.metric("عدد فحوصات اليوم", len(df_f))
+        
+        st.write("📈 إنتاجية كل موظف:")
+        st.bar_chart(df_f['الموظف'].value_counts())
+    else: st.warning("لا توجد إحصائيات بعد.")
