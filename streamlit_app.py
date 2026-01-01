@@ -12,6 +12,11 @@ st.set_page_config(page_title="BioLab Intelligence Pro", page_icon="🧬", layou
 
 st.markdown("""
     <style>
+    @media print {
+        .no-print { display: none !important; }
+        .print-only { display: block !important; }
+        [data-testid="stHeader"], [data-testid="stSidebar"], .stTabs { display: none !important; }
+    }
     html, body, [data-testid="stAppViewContainer"] {
         overflow: hidden !important; position: fixed !important;
         width: 100% !important; height: 100% !important;
@@ -38,19 +43,21 @@ st.markdown("""
     }
     @keyframes blinker { 50% { opacity: 0.5; } }
 
+    .report-paper {
+        background: white; border: 2px solid #334155; padding: 40px;
+        border-radius: 5px; color: black; font-family: 'Arial', sans-serif;
+        box-shadow: 0 0 20px rgba(0,0,0,0.1); margin: 20px auto; max-width: 800px;
+    }
+    .report-header { border-bottom: 3px solid #1e40af; padding-bottom: 20px; margin-bottom: 30px; }
+    .report-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    .report-table th, .report-table td { border-bottom: 1px solid #e2e8f0; padding: 12px; text-align: right; }
+    .report-table th { background-color: #f8fafc; color: #1e40af; }
+
     .patient-info-box {
         background: #f8fafc; border: 1px solid #e2e8f0; padding: 25px;
         border-radius: 20px; border-left: 8px solid #1e40af; margin-bottom: 25px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
-    .info-label { font-weight: bold; color: #1e40af; margin-left: 5px; }
-    
-    .stability-badge {
-        font-size: 0.8em; padding: 2px 8px; border-radius: 10px; font-weight: bold;
-    }
-    .expired { background: #fee2e2; color: #dc2626; border: 1px solid #dc2626; }
-    .fresh { background: #dcfce7; color: #16a34a; border: 1px solid #16a34a; }
-
     .header-style {
         background: linear-gradient(135deg, #0f172a 0%, #1e40af 100%);
         padding: 35px; border-radius: 25px; color: white;
@@ -64,7 +71,7 @@ st.markdown("""
 OWNER_INFO = {
     "PERMANENT_LAB_NAME": "مختبر النخبة التخصصي",
     "PERMANENT_DOC_NAME": "د. أحمد المصطفى",
-    "SYSTEM_VERSION": "v22.0 Report Export Edition",
+    "SYSTEM_VERSION": "v23.0 Pro Printing Edition",
     "LICENSE_KEY": "PREMIUM-2026-X"
 }
 
@@ -90,7 +97,7 @@ LAB_CATALOG = {
 }
 TUBE_TYPES = ["Purple (EDTA) 🟣", "Yellow (Gel) 🟡", "Red (Plain) 🔴", "Blue (Citrate) 🔵"]
 
-# --- 4. وظائف تصدير التقارير (الميزة الجديدة) ---
+# --- 4. وظائف تصدير التقارير ---
 def export_to_excel(patient_df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -131,11 +138,11 @@ else:
     df = pd.read_csv(db_path) if os.path.exists(db_path) else pd.DataFrame(columns=db_cols)
     inv_df = pd.read_csv(inv_path) if os.path.exists(inv_path) else pd.DataFrame(columns=["Item", "Stock", "Expiry", "Unit"])
 
-    st.markdown(f"""<div class="header-style"><div style="display:flex; justify-content:space-between;"><div><h1>{profile['lab_name']}</h1><p>{profile['doc_name']}</p></div><div style="text-align:right;"><h3>{datetime.now().strftime('%Y-%m-%d')}</h3></div></div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div class="header-style no-print"><div style="display:flex; justify-content:space-between;"><div><h1>{profile['lab_name']}</h1><p>{profile['doc_name']}</p></div><div style="text-align:right;"><h3>{datetime.now().strftime('%Y-%m-%d')}</h3></div></div></div>""", unsafe_allow_html=True)
 
-    tabs = st.tabs(["📊 الإحصائيات", "🧪 تسجيل فحص", "👤 ملف المريض", "📂 الأرشيف", "📦 المخزون", "🧠 تحليل AI", "💰 المالية", "⚙️ الإعدادات"])
+    tabs = st.tabs(["📊 الإحصائيات", "🧪 تسجيل فحص", "👤 ملف المريض", "📄 ورقة الطباعة", "📂 الأرشيف", "📦 المخزون", "🧠 تحليل AI", "💰 المالية", "⚙️ الإعدادات"])
 
-    with tabs[1]: # تسجيل فحص (بدون حذف أي شيء)
+    with tabs[1]: # تسجيل فحص
         with st.form("entry_form", clear_on_submit=True):
             ca, cb, cc = st.columns([2, 1, 1])
             p_name = ca.text_input("اسم المريض")
@@ -151,30 +158,73 @@ else:
             if crit_data and (res_val < crit_data[0] or res_val > crit_data[1]):
                 st.markdown(f"""<div class="critical-alert-box">⚠️ تنبيه قيمة حرجة: {res_val}!</div>""", unsafe_allow_html=True)
 
-            if st.form_submit_button("حفظ 🚀", use_container_width=True):
+            if st.form_submit_button("حفظ النتيجة 🚀", use_container_width=True):
                 status, _ = get_result_analysis(cat_sel, test_sel, res_val)
                 new_row = [p_id, datetime.now().strftime("%Y-%m-%d"), datetime.now().strftime("%Y-%m-%d %H:%M"), p_name, p_age, p_gender, cat_sel, test_sel, res_val, LAB_CATALOG[cat_sel]["Tests"][test_sel][2], status, LAB_CATALOG[cat_sel]["Tests"][test_sel][3], LAB_CATALOG[cat_sel]["DefaultTube"], profile['lab_name'], profile['doc_name']]
                 df = pd.concat([df, pd.DataFrame([new_row], columns=df.columns)], ignore_index=True)
                 df.to_csv(db_path, index=False); st.success("تم الحفظ!")
 
-    with tabs[2]: # ملف المريض + ميزة التصدير الجديدة
+    with tabs[2]: # ملف المريض
         if not df.empty:
-            p_pick = st.selectbox("اختر المريض لاستعراض ملفه", df['Patient'].unique())
+            p_pick = st.selectbox("اختر المريض لاستعراض ملفه", df['Patient'].unique(), key="patient_sel_main")
             p_hist = df[df['Patient'] == p_pick]
-            l = p_hist.iloc[-1]
-            st.markdown(f"""<div class="patient-info-box"><div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;"><div><b>الاسم:</b> {l['Patient']}</div><div><b>العمر:</b> {l['Age']}</div><div><b>الجنس:</b> {l['Gender']}</div><div><b>PID:</b> {l['PID']}</div><div><b>الطبيب:</b> {l['DoctorName']}</div><div><b>المختبر:</b> {l['LabName']}</div></div></div>""", unsafe_allow_html=True)
-            
-            # زر التصدير الجديد
-            c_rep1, c_rep2 = st.columns(2)
-            excel_data = export_to_excel(p_hist)
-            c_rep1.download_button(label="📥 تحميل تقرير المريض (Excel)", data=excel_data, file_name=f"Report_{p_pick}.xlsx", mime="application/vnd.ms-excel", use_container_width=True)
-            if c_rep2.button("🖨️ تجهيز للطباعة الفورية", use_container_width=True):
-                st.info("تم تجهيز البيانات، استخدم اختصار Ctrl+P للطباعة.")
-            
-            st.write("---")
-            selected_test_plot = st.selectbox("تتبع منحنى فحص:", p_hist['Test'].unique())
-            st.plotly_chart(px.line(p_hist[p_hist['Test'] == selected_test_plot], x='Timestamp', y='Result', markers=True), use_container_width=True)
             st.dataframe(p_hist[['Timestamp', 'Test', 'Result', 'Status']], use_container_width=True)
+            excel_data = export_to_excel(p_hist)
+            st.download_button(label="📥 تحميل السجل الكامل (Excel)", data=excel_data, file_name=f"Report_{p_pick}.xlsx", mime="application/vnd.ms-excel")
+
+    with tabs[3]: # ورقة الطباعة (الميزة الجديدة المطلوبة)
+        st.subheader("🖨️ تجهيز ورقة التحليل النهائية")
+        if not df.empty:
+            target_patient = st.selectbox("اختر المريض للطباعة", df['Patient'].unique(), key="print_sel")
+            target_data = df[df['Patient'] == target_patient]
+            latest = target_data.iloc[-1]
+            
+            # عرض الورقة بشكل يحاكي الحقيقة
+            st.markdown(f"""
+            <div class="report-paper">
+                <div class="report-header">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div style="text-align:right;">
+                            <h2 style="color:#1e40af; margin:0;">{profile['lab_name']}</h2>
+                            <p style="margin:2px;">إشراف: {profile['doc_name']}</p>
+                        </div>
+                        <div style="text-align:left; font-size:0.9em; color:#64748b;">
+                            <p style="margin:2px;">التاريخ: {latest['Date']}</p>
+                            <p style="margin:2px;">الوقت: {latest['Timestamp'].split(' ')[1]}</p>
+                            <p style="margin:2px;">رقم الملف: {latest['PID']}</p>
+                        </div>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; background:#f1f5f9; padding:15px; border-radius:8px; margin-bottom:20px;">
+                    <div><b>الاسم:</b> {latest['Patient']}</div>
+                    <div><b>العمر:</b> {latest['Age']}</div>
+                    <div><b>الجنس:</b> {latest['Gender']}</div>
+                    <div><b>الحالة:</b> مراجع خارجي</div>
+                </div>
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>التحليل (Test Name)</th>
+                            <th>النتيجة (Result)</th>
+                            <th>الوحدة (Unit)</th>
+                            <th>المدى الطبيعي (Normal Range)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {"".join([f"<tr><td>{r['Test']}</td><td><b>{r['Result']}</b></td><td>{r['Unit']}</td><td>{LAB_CATALOG.get(r['Category'], {}).get('Tests', {}).get(r['Test'], (0,0))[0]} - {LAB_CATALOG.get(r['Category'], {}).get('Tests', {}).get(r['Test'], (0,0))[1]}</td></tr>" for _, r in target_data.iterrows()])}
+                    </tbody>
+                </table>
+                <div style="margin-top:50px; display:flex; justify-content:space-between; font-size:0.8em; border-top: 1px solid #e2e8f0; padding-top:10px;">
+                    <p>توقيع الطبيب المختص: _________________</p>
+                    <p>ختم المختبر الرسمي</p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("🖨️ طباعة التقرير"):
+                st.write("يرجى استخدام Ctrl+P (أو Cmd+P على Mac) لاختيار الطابعة وحفظ التقرير.")
+        else:
+            st.warning("لا توجد بيانات متاحة للطباعة حالياً.")
 
     with tabs[0]: # الإحصائيات
         c1, c2, c3 = st.columns(3)
@@ -182,11 +232,12 @@ else:
         c2.metric("دخل اليوم", f"{df[df['Date']==datetime.now().strftime('%Y-%m-%d')]['Price'].sum()} {profile['currency']}")
         c3.metric("الفحوصات المنفذة", len(df))
 
-    with tabs[4]: # المخزن
+    with tabs[5]: # المخزن
         st.subheader("📦 إدارة المخزون")
         st.dataframe(inv_df, use_container_width=True)
 
-    with tabs[7]: # الإعدادات
+    with tabs[8]: # الإعدادات
         if st.button("تسجيل الخروج"): st.session_state.user_code = None; st.rerun()
 
     st.markdown(f"<center style='opacity:0.2;'>{OWNER_INFO['SYSTEM_VERSION']}</center>", unsafe_allow_html=True)
+
