@@ -44,8 +44,56 @@ st.markdown("""
     <style>
     /* 1. منع خاصية السحب للتحديث في الأندرويد والآيفون نهائياً */
     html, body, [data-testid="stAppViewContainer"], .main {
-        overscroll-behavior-y: contain !important;
+        # --- 2. الحل النهائي والقطعي لمنع تحديث الصفحة (JS & CSS Force Lock) ---
+st.set_page_config(page_title="BioLab Ultra", page_icon="🧬", layout="wide")
+
+# هذا الكود يقوم بحقن جافا سكريبت تمنع المتصفح من الارتداد للأعلى تماماً
+st.components.v1.html("""
+    <script>
+    // تعطيل السحب لأسفل تماماً لمنع حلقة التحميل
+    window.addEventListener('touchstart', function(e) {
+        if (e.touches.length !== 1) return;
+        this.startPos = e.touches[0].pageY;
+    }, {passive: false});
+
+    window.addEventListener('touchmove', function(e) {
+        var touch = e.touches[0];
+        if (this.startPos < touch.pageY && window.scrollY <= 1) {
+            // إذا كان المستخدم يسحب لأسفل وهو في أعلى الصفحة، نمنع المتصفح
+            e.preventDefault();
+        }
+    }, {passive: false});
+    </script>
+""", height=0)
+
+st.markdown("""
+    <style>
+    /* قفل المحتوى لمنع المتصفح من استدعاء ميزة Pull-to-refresh */
+    html, body {
+        overscroll-behavior-y: none !important;
         overscroll-behavior: none !important;
+        height: 100% !important;
+        overflow: hidden !important;
+    }
+    
+    [data-testid="stAppViewContainer"] {
+        height: 100vh !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* تحسين البطاقات */
+    .patient-card {
+        background: #ffffff; padding: 15px; border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 10px;
+        border-right: 5px solid #1e3a8a; color: #1e293b;
+    }
+    
+    header { visibility: hidden !important; } 
+    footer { visibility: hidden !important; }
+    </style>
+""", unsafe_allow_html=True)
+
         position: fixed;
         width: 100%;
         height: 100%;
