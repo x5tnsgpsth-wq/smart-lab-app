@@ -5,51 +5,60 @@ import os
 from datetime import datetime
 
 # 1. إعدادات الهوية والجمالية
-st.set_page_config(page_title="Smart Lab System v27", page_icon="🔬", layout="wide")
+st.set_page_config(page_title="Smart Lab System v28", page_icon="🔬", layout="wide")
 
-# تصميم CSS لجعل النتيجة تبدو كأنها ورقة رسمية مطبوعة
-st.markdown("""
-    <style>
-    .report-box {
-        border: 2px solid #333;
-        padding: 20px;
-        border-radius: 10px;
-        background-color: white;
-        color: black;
-        direction: rtl;
-        font-family: 'Arial';
-    }
-    .report-header { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-    .status-badge { padding: 5px 10px; border-radius: 5px; color: white; font-weight: bold; }
-    </style>
-    """, unsafe_allow_html=True)
+# 2. إدارة البيانات والإعدادات
+DB_FILE = "lab_pro_v28.csv"
+SETTINGS_FILE = "settings.csv"
 
-# 2. إدارة البيانات
-DB_FILE = "lab_pro_v27.csv"
+# وظيفة تحميل اسم المختبر
+def get_lab_name():
+    if os.path.exists(SETTINGS_FILE):
+        return pd.read_csv(SETTINGS_FILE)['lab_name'].iloc[0]
+    return "مختبر التحليلات الافتراضي"
+
+# تهيئة البيانات في الجلسة
 if 'df' not in st.session_state:
     if os.path.exists(DB_FILE):
         st.session_state.df = pd.read_csv(DB_FILE)
     else:
         st.session_state.df = pd.DataFrame(columns=["التاريخ", "المريض", "الفحص", "النتيجة", "الحالة", "المحلل", "الهاتف", "ملاحظات"])
 
+lab_name = get_lab_name()
+
 # مرجع النطاقات الطبيعية
 NR = {"Glucose": [70, 126], "CBC": [12, 16], "HbA1c": [4, 5.6], "Urea": [15, 45]}
 
+# تصميم CSS لتحسين شكل التقرير
+st.markdown(f"""
+    <style>
+    .report-box {{
+        border: 2px solid #333;
+        padding: 25px;
+        border-radius: 15px;
+        background-color: white;
+        color: black;
+        direction: rtl;
+        box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
+    }}
+    .report-header {{ text-align: center; border-bottom: 3px double #333; padding-bottom: 15px; margin-bottom: 20px; }}
+    .stApp {{ direction: rtl; text-align: right; }}
+    </style>
+    """, unsafe_allow_html=True)
+
 # 3. واجهة التطبيق
-st.title("🔬 منظومة المختبر الذكي - الإصدار v27")
+st.title(f"🔬 {lab_name}")
 
-tabs = st.tabs(["📝 إدخال وفحص", "📄 إصدار تقرير", "📊 إحصائيات المختبر"])
+tabs = st.tabs(["📝 إدخال وفحص", "📄 إصدار تقرير", "📊 إحصائيات", "⚙️ إعدادات المختبر"])
 
-# --- التبويب 1: إدخال البيانات الذكي ---
+# --- التبويب 1: إدخال البيانات ---
 with tabs[0]:
     with st.form("entry_form"):
         c1, c2 = st.columns(2)
         with c1:
             p_phone = st.text_input("رقم هاتف المريض")
-            # ميزة التعبئة التلقائية إذا كان المريض مسجلاً سابقاً
             existing_p = st.session_state.df[st.session_state.df['الهاتف'] == p_phone]
             default_name = existing_p['المريض'].iloc[-1] if not existing_p.empty else ""
-            
             p_name = st.text_input("اسم المريض", value=default_name)
             p_test = st.selectbox("نوع الفحص", list(NR.keys()))
         with c2:
@@ -65,42 +74,52 @@ with tabs[0]:
             new_data = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), p_name, p_test, p_res, status, p_staff, p_phone, p_note]], columns=st.session_state.df.columns)
             st.session_state.df = pd.concat([st.session_state.df, new_data], ignore_index=True)
             st.session_state.df.to_csv(DB_FILE, index=False)
-            st.success("✅ تم الحفظ بنجاح")
+            st.success("✅ تم حفظ البيانات بنجاح")
 
 # --- التبويب 2: إصدار التقرير الرسمي ---
 with tabs[1]:
-    st.subheader("📄 عرض وطباعة النتيجة")
     if not st.session_state.df.empty:
         target_name = st.selectbox("اختر المريض لعرض تقريره:", st.session_state.df['المريض'].unique())
         report_data = st.session_state.df[st.session_state.df['المريض'] == target_name].iloc[-1]
         
-        # تصميم التقرير
         st.markdown(f"""
         <div class="report-box">
             <div class="report-header">
-                <h2>مختبر التحليلات المرضية الذكي</h2>
-                <p>تاريخ الفحص: {report_data['التاريخ']}</p>
+                <h1 style="margin:0;">{lab_name}</h1>
+                <p>تقرير نتائج الفحوصات المختبرية</p>
+                <hr>
+                <p style="text-align:right;">تاريخ الإصدار: {report_data['التاريخ']}</p>
             </div>
-            <table style="width:100%; text-align:right; margin-top:20px;">
-                <tr><td><b>اسم المريض:</b></td><td>{report_data['المريض']}</td></tr>
-                <tr><td><b>نوع الفحص:</b></td><td>{report_data['الفحص']}</td></tr>
-                <tr><td><b>النتيجة:</b></td><td><span style="font-size:20px; color:blue;">{report_data['النتيجة']}</span></td></tr>
-                <tr><td><b>النطاق الطبيعي:</b></td><td>{NR[report_data['الفحص']][0]} - {NR[report_data['الفحص']][1]}</td></tr>
-                <tr><td><b>الحالة:</b></td><td>{report_data['الحالة']}</td></tr>
+            <table style="width:100%; text-align:right; border-collapse: collapse;">
+                <tr style="background-color:#f2f2f2;"> <td style="padding:10px;"><b>اسم المريض:</b></td> <td style="padding:10px;">{report_data['المريض']}</td> </tr>
+                <tr> <td style="padding:10px;"><b>نوع الفحص:</b></td> <td style="padding:10px;">{report_data['الفحص']}</td> </tr>
+                <tr style="background-color:#f2f2f2;"> <td style="padding:10px;"><b>النتيجة:</b></td> <td style="padding:10px; font-size:22px; color:#d63031;"><b>{report_data['النتيجة']}</b></td> </tr>
+                <tr> <td style="padding:10px;"><b>النطاق الطبيعي:</b></td> <td style="padding:10px;">{NR[report_data['الفحص']][0]} - {NR[report_data['الفحص']][1]}</td> </tr>
+                <tr style="background-color:#f2f2f2;"> <td style="padding:10px;"><b>الحالة:</b></td> <td style="padding:10px;">{report_data['الحالة']}</td> </tr>
             </table>
-            <div style="margin-top:20px; border-top:1px solid #eee; padding-top:10px;">
+            <div style="margin-top:20px; border:1px solid #eee; padding:10px;">
                 <b>ملاحظات الطبيب:</b> {report_data['ملاحظات']}
             </div>
-            <div style="margin-top:30px; text-align:left;">
-                <p>توقيع المحلل: {report_data['المحلل']}</p>
+            <div style="margin-top:30px; display:flex; justify-content:space-between;">
+                <span>ختم المختبر</span>
+                <span>توقيع المحلل: {report_data['المحلل']}</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
     else:
-        st.info("لا توجد بيانات لإصدار تقارير.")
+        st.info("سجل بيانات مريض أولاً لإظهار التقرير.")
+
+# --- التبويب 4: إعدادات المختبر (الإضافة الجديدة) ---
+with tabs[3]:
+    st.subheader("⚙️ إعدادات هوية المختبر")
+    new_lab_name = st.text_input("اكتب اسم مختبرك هنا:", value=lab_name)
+    if st.button("حفظ اسم المختبر الجديد"):
+        pd.DataFrame({'lab_name': [new_lab_name]}).to_csv(SETTINGS_FILE, index=False)
+        st.success("تم تحديث اسم المختبر! يرجى إعادة تحميل الصفحة.")
+        st.rerun()
 
 # --- التبويب 3: الإحصائيات ---
 with tabs[2]:
     if not st.session_state.df.empty:
-        fig = px.pie(st.session_state.df, names='الحالة', title="تحليل الحالات العامة")
+        fig = px.pie(st.session_state.df, names='الحالة', title="توزيع الحالات الطبية المسجلة", hole=0.3)
         st.plotly_chart(fig)
